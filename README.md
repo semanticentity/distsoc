@@ -1,33 +1,19 @@
-![Screenshot](distsoc.png)
-
 # Distsoc Playground
+
+Live demo: https://codepen.io/semanticentity/full/xbbVpdX
+
+![distsoc](https://github.com/user-attachments/assets/f5d98b55-de3c-4d59-bf3c-d11d37107e53)
 
 A minimal, interactive playground for exploring CLIs and APIs visually.
 
 - Open `distoc.html` in your browser.
-- Use the terminal and interact with nodes.
+- Arrow keys or double click on nodes to move.
+- Click on nodes to open the info panel.
+- When near a node, press `E` to open the terminal.
+- Use the terminal and interact with nodes. Type `help` for a list of commands.
 
-**License:** Proprietary. All rights reserved.
-- See the `gemma3_api_server.py` example for a Python backend that exposes available tools and runs them on demand.
-- You can fetch tool lists and send commands from the UI using JavaScript `fetch` calls.
-
-## Customization
-
-- **Add new tools/nodes** by editing the backend or providing a JSON/YAML config.
-- **Change the world** by modifying `distoc.html`—add new buildings, pets, or visual effects.
-- **Wire up new commands** in the terminal to backend endpoints or in-game actions.
-
-## Vision
-
-Distsoc aims to make technical concepts accessible and fun for everyone. It can be used for:
-- Teaching CLI and API basics to beginners
-- Prototyping interactive tech demos
-- Gamifying onboarding for developer tools
-- Creative coding and learning experiments
-
-## License
-
-MIT License (or specify your preferred license)
+**License:** CC BY-NC-ND 4.0  
+Attribution-NonCommercial-NoDerivatives 4.0 International
 
 ---
 
