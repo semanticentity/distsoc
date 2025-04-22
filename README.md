@@ -2,7 +2,7 @@
 
 Live demo: https://codepen.io/semanticentity/full/xbbVpdX
 
-![distsoc](https://github.com/user-attachments/assets/f5d98b55-de3c-4d59-bf3c-d11d37107e53)
+![distsoc-sandbox](https://github.com/user-attachments/assets/8dd0382e-7d26-4a14-a2dc-77f28901da7c)
 
 An interactive playground for exploring distributed systems, CLIs, and APIs visually, with an expanded world and enhanced features.
 
@@ -14,6 +14,8 @@ An interactive playground for exploring distributed systems, CLIs, and APIs visu
 - Click on nodes to open the info panel
 - When near a node, press `E` to open the terminal
 - Use the terminal to interact with nodes - type `help` for a list of commands
+
+![distsoc-sandbox](https://github.com/user-attachments/assets/9fc47bd9-3912-4a9e-9f6c-1b9a7805cb5a)
 
 ### Camera System
 - **Unlimited World**: Explore beyond the canvas edges with the new camera system
@@ -39,6 +41,8 @@ An interactive playground for exploring distributed systems, CLIs, and APIs visu
   - Gray dot: Idle node
 - **Multi-tasking**: Click on other nodes while the terminal is open to view their info
 - **Controls Help**: Basic controls displayed in the bottom-left corner
+
+![distsoc-challenge2](https://github.com/user-attachments/assets/06e0d140-32ee-4634-94d7-1061898458b6)
 
 ## Getting Started
 
