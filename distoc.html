@@ -83,22 +83,6 @@
     #terminal-resize-handle:hover {
       opacity: 1;
     }
-    #terminal-resize-handle {
-      position: absolute;
-      width: 18px;
-      height: 18px;
-      right: 2px;
-      bottom: 2px;
-      cursor: se-resize;
-      z-index: 10;
-      background: linear-gradient(135deg, #312e81 40%, #9ca3af 100%);
-      border-radius: 3px;
-      opacity: 0.6;
-      transition: opacity 0.2s;
-    }
-    #terminal-resize-handle:hover {
-      opacity: 1;
-    }
     #terminal pre { margin: 0; white-space: pre-wrap; overflow-y: auto; scrollbar-width: thin; scrollbar-color: #4B5563 #1F2937; }
     #terminal pre::-webkit-scrollbar { width: 8px; }
     #terminal pre::-webkit-scrollbar-track { background: #1F2937; border-radius: 4px; }
@@ -133,6 +117,73 @@
     #building-info .close-btn { position: absolute; top: 5px; right: 8px; background: none; border: none; color: #9CA3AF; font-size: 18px; cursor: pointer; padding: 0; line-height: 1; }
     #building-info .close-btn:hover { color: #E5E7EB; }
 
+    /* --- Mode Selector Styles --- */
+    /* --- Mode Selector Styles --- */
+    #mode-selector { margin-top: 10px; display: flex; align-items: center; }
+    #mode-selector span { margin-right: 10px; color: #A78BFA; }
+    .mode-btn { 
+      background: rgba(31, 41, 55, 0.7); 
+      border: 1px solid #4B5563; 
+      padding: 5px 12px; 
+      font-size: 14px; 
+      cursor: pointer; 
+      color: #E5E7EB; 
+      margin-right: 5px;
+      border-radius: 4px;
+      transition: all 0.2s ease;
+    }
+    .mode-btn:hover { background: rgba(31, 41, 55, 0.9); border-color: #6B7280; }
+    .mode-btn.active { 
+      background: linear-gradient(135deg, #312e81 0%, #4F46E5 100%); 
+      color: #F9FAFB; 
+      border-color: #6366F1; 
+      box-shadow: 0 0 8px rgba(99, 102, 241, 0.6);
+    }
+    
+    /* --- Tooltip Styles --- */
+    .tooltip {
+      position: relative;
+      display: inline-block;
+    }
+    .tooltip .tooltiptext {
+      visibility: hidden;
+      background-color: rgba(31, 41, 55, 0.95);
+      color: #F9FAFB;
+      text-align: center;
+      border-radius: 6px;
+      padding: 8px 12px;
+      position: absolute;
+      z-index: 1;
+      bottom: 125%;
+      left: 50%;
+      transform: translateX(-50%);
+      opacity: 0;
+      transition: opacity 0.3s;
+      font-size: 12px;
+      width: 200px;
+      border: 1px solid #4B5563;
+      box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
+      pointer-events: none;
+    }
+    .tooltip:hover .tooltiptext {
+      visibility: visible;
+      opacity: 1;
+    }
+    
+    /* --- Node Tooltip Styles --- */
+    .node-tooltip {
+      background-color: rgba(31, 41, 55, 0.95);
+      color: #F9FAFB;
+      border-radius: 6px;
+      padding: 10px 14px;
+      font-size: 13px;
+      max-width: 250px;
+      border: 1px solid #6366F1;
+      box-shadow: 0 4px 15px rgba(0, 0, 0, 0.5), 0 0 8px rgba(99, 102, 241, 0.4);
+      backdrop-filter: blur(3px);
+      line-height: 1.4;
+      text-align: left;
+    }
   </style>
 </head>
 
@@ -141,6 +192,22 @@
   <div id="ui">
     <div id="focus-meter"><div id="focus-bar"></div></div>
     <div id="stats" class="stats"></div>
+    <div id="mode-selector" class="stats">
+      <span>Mode: </span>
+      <div class="tooltip">
+        <button id="sandbox-mode" class="mode-btn active">Sandbox</button>
+        <span class="tooltiptext">Learn at your own pace without time pressure. Explore nodes and connections with helpful guidance.</span>
+      </div>
+      <div class="tooltip">
+        <button id="challenge-mode" class="mode-btn">Challenge</button>
+        <span class="tooltiptext">Complete timed tasks to earn points. Each attempt gives you 2 minutes to build the required connections.</span>
+      </div>
+    </div>
+    <div id="game-stats" class="stats" style="display: none;">
+      <div id="score">Score: 0</div>
+      <div id="task-timer">Time: 2:00</div>
+      <div id="tasks-completed">Tasks: 0</div>
+    </div>
     <div id="terminal" class="">
       <pre id="terminal-log"></pre>
       <div id="terminal-input-line">
@@ -175,17 +242,17 @@
     let currentNode = null;
     let commandHistory = [];
     let historyIndex = -1;
-    const knownCommands = ['help', 'clear', 'status', 'list tools', 'run sanitize', 'send', 'run', 'exit', 'scan network']; // Simplified 'send' and 'run'
+    const knownCommands = ['help', 'clear', 'status', 'list tools', 'run sanitize', 'send', 'run', 'exit', 'scan network', 'lock']; // Added lock command
 
     // --- Enhancement State ---
     let networkScanActive = false;
     // --- Building Data Definitions ---
     const BUILDING_DEFAULTS = {
-        'home': { name: "Nexus Core", description: "Primary command & control hub. Regenerates focus.", tools: ["diagnostic_suite", "focus_recharge"], connections: { input: [], output: ["code", "data", "etl"] }, color: '#6366F1' },
-        'code': { name: "Compiler Unit", description: "Processes and refines code fragments.", tools: ["compile", "lint", "refactor"], connections: { input: ["home", "data"], output: ["data", "etl"] }, color: '#10B981' },
-        'data': { name: "Data Silo", description: "Stores and validates incoming data streams.", tools: ["parse", "validate", "transform"], connections: { input: ["home", "code", "etl"], output: ["code", "storage"] }, color: '#F59E0B' },
-        'etl': { name: "ETL Pipeline", description: "Extracts, transforms, and loads data between nodes.", tools: ["extract", "route", "load_balance"], connections: { input: ["code", "data"], output: ["data", "storage", "home"] }, color: '#EC4899' },
-        'storage': { name: "Archive Vault", description: "Long-term, secure data persistence.", tools: ["archive", "retrieve", "checksum"], connections: { input: ["data", "etl"], output: [] }, color: '#8B5CF6' }
+        'home': { name: "Home Base", description: "Your central hub. Connects to other nodes and recharges focus.", tools: ["diagnostic_suite", "focus_recharge"], connections: { input: [], output: ["code", "data", "etl"] }, color: '#6366F1' },
+        'code': { name: "Code Workshop", description: "Creates and improves code for your network.", tools: ["compile", "lint", "refactor"], connections: { input: ["home", "data"], output: ["data", "etl"] }, color: '#10B981' },
+        'data': { name: "Data Center", description: "Stores and organizes information for your network.", tools: ["parse", "validate", "transform"], connections: { input: ["home", "code", "etl"], output: ["code", "storage"] }, color: '#F59E0B' },
+        'etl': { name: "Transfer Station", description: "Moves and transforms data between different nodes.", tools: ["extract", "route", "load_balance"], connections: { input: ["code", "data"], output: ["data", "storage", "home"] }, color: '#EC4899' },
+        'storage': { name: "Storage Vault", description: "Safely stores data for long-term use.", tools: ["archive", "retrieve", "checksum"], connections: { input: ["data", "etl"], output: [] }, color: '#8B5CF6' }
     };
     const ALL_BUILDING_TYPES = Object.keys(BUILDING_DEFAULTS);
     const colors = { // Keep colors definition consistent
@@ -235,6 +302,38 @@
 
     // --- Game Object ---
     const game = {
+      // Camera system for panning and zooming
+      camera: {
+        x: 0,
+        y: 0,
+        zoom: 1,
+        minZoom: 0.5,
+        maxZoom: 2,
+        followPlayer: true,
+        panSpeed: 10,
+        // Convert world coordinates to screen coordinates
+        worldToScreen: function(worldX, worldY) {
+          return {
+            x: (worldX - this.x) * this.zoom + canvas.width / 2,
+            y: (worldY - this.y) * this.zoom + canvas.height / 2
+          };
+        },
+        // Convert screen coordinates to world coordinates
+        screenToWorld: function(screenX, screenY) {
+          return {
+            x: (screenX - canvas.width / 2) / this.zoom + this.x,
+            y: (screenY - canvas.height / 2) / this.zoom + this.y
+          };
+        },
+        // Update camera position to follow player
+        update: function() {
+          if (this.followPlayer) {
+            // Smooth camera movement towards player
+            this.x += (game.player.x - this.x) * 0.1;
+            this.y += (game.player.y - this.y) * 0.1;
+          }
+        }
+      },
       player: { x: 400, y: 300, size: 25, speed: 4, focus: 100, maxFocus: 100, rotation: 0 },
       pets: [
         { x: 350, y: 300, size: 12, color: colors.pet1, targetOffset: { x: -40, y: -15 }, rotation: 0, lerpFactor: 0.1 },
@@ -243,7 +342,27 @@
       buildings: [],
       particles: new ParticleSystem(), // Create instance AFTER class definition
       keys: {},
-      isMovingPlayer: false
+      isMovingPlayer: false,
+      // Game progression tracking
+      score: 0,
+      completedTasks: 0,
+      currentTask: null,
+      taskStartTime: 0,
+      taskTimeLimit: 120, // seconds
+      connections: [], // Track active connections between nodes
+      // Game mode
+      mode: 'sandbox', // 'sandbox' or 'challenge'
+      sandboxSteps: [
+        { message: "Welcome to Sandbox Mode! Let's learn the basics.", type: 'welcome' },
+        { message: "First, move around using the arrow keys or double-click on a node.", type: 'movement' },
+        { message: "Now, approach a node and press 'E' to connect to it.", type: 'connect' },
+        { message: "Type 'help' to see available commands.", type: 'help' },
+        { message: "Try 'list tools' to see what tools this node has.", type: 'tools' },
+        { message: "Now try 'send [node_type]' to connect to another node.", type: 'send' },
+        { message: "Great! You've created your first connection. Try connecting more nodes.", type: 'connection' },
+        { message: "When you're ready for a challenge, click 'Challenge Mode' at the top.", type: 'complete' }
+      ],
+      currentSandboxStep: 0
     };
 
 
@@ -271,6 +390,86 @@
       step();
     }
 
+    // Function to show a special locked terminal view for locked nodes
+    function showLockedTerminal(building) {
+      // Don't set currentNode since we're not actually connected
+      terminalLog.innerHTML = '';
+      terminal.classList.add('show');
+      terminalActive = true;
+      showBuildingInfo(building); // Auto open info panel for this node
+      
+      // Change terminal border color to red to indicate locked status
+      const originalBorder = terminal.style.border;
+      terminal.style.border = '2px solid #EF4444';
+      
+      // Fallback: Focus input immediately, even before typeLine finishes
+      setTimeout(() => { terminalInput.focus(); }, 10);
+      
+      // Show locked terminal interface
+      typeLine(`>> Attempting connection to ${building.name} (${building.type.toUpperCase()}) node [${building.x}, ${building.y}]...`, { className: 'info' });
+      setTimeout(() => {
+          typeLine(`>> ACCESS DENIED: Node is locked.`, { className: 'error' });
+          setTimeout(() => {
+              typeLine(`>> Security protocol active. Authentication required.`, { className: 'warn' });
+              setTimeout(() => {
+                  typeLine(`>> Enter credentials to unlock (format: 'auth username password'):`, { className: 'system' });
+                  
+                  // Override the handleCommand function temporarily for this terminal session
+                  const originalHandleCommand = handleCommand;
+                  handleCommand = function(cmd) {
+                      typeLine(`> ${cmd}`, { className: 'input', delay: 1 });
+                      
+                      const args = cmd.toLowerCase().split(' ');
+                      if (args[0] === 'auth' && args.length >= 3) {
+                          const username = args[1];
+                          const password = args[2];
+                          
+                          // Check if credentials are valid (custom password or default 'unlock')
+                          const correctPassword = building.unlockPassword || 'unlock';
+                          if (password === correctPassword) {
+                              typeLine(`>> Authentication successful. Welcome, ${username}.`, { className: 'success' });
+                              setTimeout(() => {
+                                  // Unlock the node
+                                  building.locked = false;
+                                  
+                                  // Visual feedback for unlocking
+                                  game.particles.emit(building.x + building.width/2, 
+                                                      building.y + building.height/2, 
+                                                      '#10B981', 10, 20, [3, 6], 1.5);
+                                  
+                                  // Reset terminal border
+                                  terminal.style.border = originalBorder;
+                                  
+                                  // Reset handleCommand and show normal terminal
+                                  handleCommand = originalHandleCommand;
+                                  hideTerminal();
+                                  setTimeout(() => {
+                                      showTerminal(building);
+                                  }, 500);
+                              }, 1000);
+                          } else {
+                              typeLine(`>> Authentication failed. Invalid credentials.`, { className: 'error' });
+                          }
+                      } else if (args[0] === 'exit') {
+                          typeLine(`>> Disconnecting...`, { className: 'warn' });
+                          setTimeout(() => {
+                              // Reset terminal border and handleCommand
+                              terminal.style.border = originalBorder;
+                              handleCommand = originalHandleCommand;
+                              hideTerminal();
+                          }, 500);
+                      } else {
+                          typeLine(`>> Command not recognized. Use 'auth username password' to authenticate or 'exit' to disconnect.`, { className: 'warn' });
+                      }
+                      
+                      // Focus the input
+                      setTimeout(() => { terminalInput.focus(); }, 10);
+                  };
+              }, 800);
+          }, 800);
+      }, 800);
+    }
+    
     function showTerminal(building) {
       currentNode = building;
       terminalLog.innerHTML = '';
@@ -284,6 +483,41 @@
       typeLine(`>> Establishing connection to ${building.name} (${building.type.toUpperCase()}) node [${building.x}, ${building.y}]...`, { className: 'info' });
       setTimeout(() => {
           typeLine(`>> Secure channel established.`, { className: 'success' });
+          
+          // In sandbox mode, provide extra information about the node
+          if (game.mode === 'sandbox') {
+            // Show node-specific information
+            const nodeType = building.type;
+            let nodeInfo = '';
+            
+            switch(nodeType) {
+              case 'home':
+                nodeInfo = `This is a ${building.name}, the central hub of your network. It can connect to code, data, and ETL nodes.`;
+                break;
+              case 'code':
+                nodeInfo = `This is a ${building.name}, used for processing code. It can receive from home/data nodes and send to data/ETL nodes.`;
+                break;
+              case 'data':
+                nodeInfo = `This is a ${building.name}, used for data processing. It has versatile connections to most other node types.`;
+                break;
+              case 'etl':
+                nodeInfo = `This is a ${building.name}, used for data transformation. It can connect to data, storage, and home nodes.`;
+                break;
+              case 'storage':
+                nodeInfo = `This is a ${building.name}, used for data storage. It can receive from data and ETL nodes but doesn't send data out.`;
+                break;
+              default:
+                nodeInfo = `This is a ${building.name}. Explore its connections using commands.`;
+            }
+            
+            // Show the info with a slight delay
+            setTimeout(() => {
+              typeLine(`>> ${nodeInfo}`, { className: 'info' });
+              typeLine(`>> Input connections: ${building.connections?.input?.join(', ') || 'none'}`, { className: 'info' });
+              typeLine(`>> Output connections: ${building.connections?.output?.join(', ') || 'none'}`, { className: 'info' });
+            }, 300);
+          }
+          
           typeLine(`Status: ONLINE. Type 'help' for commands.`, { className: 'system' }, () => {
               terminalInput.value = '';
               terminalInput.focus(); // Always focus terminal input
@@ -363,6 +597,9 @@
     function handleCommand(cmd, node) { // node parameter is important!
         const fullCmdText = cmd; // Keep original for history if needed
         typeLine(`> ${fullCmdText}`, { className: 'input', delay: 1 });
+        
+        // Add to command history for sandbox mode progression tracking
+        commandHistory.push(fullCmdText);
 
         if (!node && !['exit', 'scan', 'help', 'clear'].includes(cmd.toLowerCase().split(' ')[0])) { // Allow some global commands
             typeLine(">> CRITICAL ERROR: No node connection required for this command.", { className: 'error' });
@@ -429,42 +666,106 @@
                }
                break;
            case 'send':
-              if (!node) { typeLine(">> ERROR: Connect to a node first.", { className: 'error' }, () => terminalInput.focus()); break; }
-              const targetType = args[1];
-              if (!targetType) {
-                  typeLine(">> Usage: send <target_type>", { className: 'warn' }, () => terminalInput.focus());
-                  break;
-              }
+          if (!node) { typeLine(">> ERROR: Connect to a node first.", { className: 'error' }, () => terminalInput.focus()); break; }
+          const targetType = args[1];
+          if (!targetType) {
+              typeLine(">> Usage: send <target_type>", { className: 'warn' }, () => terminalInput.focus());
+              break;
+          }
 
-              if (!node.connections?.output?.includes(targetType)) {
-                  typeLine(`>> ERROR: Node ${node.name} cannot send output to ${targetType.toUpperCase()} nodes.`, { className: 'error' }, () => terminalInput.focus());
-                  break;
-              }
+          if (!node.connections?.output?.includes(targetType)) {
+              typeLine(`>> ERROR: Node ${node.name} cannot send output to ${targetType}.`, { className: 'error' }, () => terminalInput.focus());
+              break;
+          }
 
-              const targetNode = game.buildings.find(b =>
-                  b !== node &&
-                  b.type === targetType &&
-                  !b.locked && // Can only send to unlocked nodes
-                  b.connections?.input?.includes(node.type)
-              );
+          // Find a target node of the right type
+          const targetNodes = game.buildings.filter(b => b.type === targetType && !b.locked);
+          if (targetNodes.length === 0) {
+              typeLine(`>> ERROR: No available ${targetType} nodes found.`, { className: 'error' }, () => terminalInput.focus());
+              break;
+          }
 
-              if (targetNode) {
-                  typeLine(`>> Initiating secure transfer from ${node.type.toUpperCase()} to ${targetNode.name} (${targetType.toUpperCase()}) at [${targetNode.x}, ${targetNode.y}]...`, { className: 'info' });
-                  setTimeout(() => typeLine(">> Establishing handshake...", { className: 'warn' }), 800);
-                  setTimeout(() => typeLine(">> Transferring packet [####################] 100%", { className: 'info' }), 1800);
-                  setTimeout(() => typeLine(">> Transfer successful. Connection closed.", { className: 'success' }, () => terminalInput.focus()), 2500);
-              } else {
-                   typeLine(`>> ERROR: No available/unlocked target node of type ${targetType.toUpperCase()} found or connection disallowed.`, { className: 'error' }, () => terminalInput.focus());
+          // Activate both nodes
+          node.active = true;
+          const targetNode = targetNodes[0]; // Just use the first one for now
+          targetNode.active = true;
+
+          // Create connection and store it
+          const newConnection = {
+              from: node,
+              to: targetNode,
+              established: Date.now()
+          };
+          
+          // Check if this connection already exists
+          const existingConnection = game.connections.find(c => 
+              (c.from === node && c.to === targetNode) || 
+              (c.from === targetNode && c.to === node));
+              
+          if (!existingConnection) {
+              game.connections.push(newConnection);
+          }
+
+          // Visual feedback
+          typeLine(`>> Establishing connection to ${targetNode.name}...`, { className: 'info' });
+          setTimeout(() => {
+              typeLine(`>> Connection established: ${node.name} → ${targetNode.name}`, { className: 'success' }, () => {
+                  // Check if this connection completes the current task
+                  checkTaskCompletion();
+                  terminalInput.focus();
+              });
+              
+              // Emit particles along the connection path
+              const startX = node.x + node.width/2;
+              const startY = node.y + node.height/2;
+              const endX = targetNode.x + targetNode.width/2;
+              const endY = targetNode.y + targetNode.height/2;
+              
+              // Emit particles along the path
+              const steps = 10;
+              for (let i = 0; i < steps; i++) {
+                  const t = i / steps;
+                  const x = startX + (endX - startX) * t;
+                  const y = startY + (endY - startY) * t;
+                  setTimeout(() => {
+                      game.particles.emit(x, y, colors.network, 2, 5, [2, 5], 0.8);
+                  }, i * 80);
               }
-               break;
+          }, 800);
+          break;
            case 'scan':
                 if (args[1] === 'network') {
                     typeLine(">> Scanning network for available nodes...", { className: 'info' });
+                    
+                    // Activate network scan visual effect
+                    networkScanActive = true;
+                    setTimeout(() => { networkScanActive = false; }, 5000); // Show network connections for 5 seconds
+                    
                     game.buildings.forEach((b, index) => {
                        setTimeout(() => {
-                            typeLine(`  [${index}] ${b.name} (${b.type.toUpperCase()}) @ [${b.x}, ${b.y}] ${b.locked ? '-LOCKED-' : ''}`, { className: b.locked ? 'warn' : 'system', delay: 5});
+                            // Check if this is the current node the player is connected to
+                            const isCurrentNode = (node && b === node);
+                            const nodeStatus = b.locked ? '-LOCKED-' : (isCurrentNode ? '★ CONNECTED ★' : '');
+                            
+                            // Use special highlighting for current node
+                            const className = b.locked ? 'warn' : (isCurrentNode ? 'success' : 'system');
+                            
+                            typeLine(`  [${index}] ${b.name} (${b.type.toUpperCase()}) @ [${b.x}, ${b.y}] ${nodeStatus}`, 
+                                    { className: className, delay: 5});
+                            
+                            // If this is the current node, add a visual pulse effect to it
+                            if (isCurrentNode) {
+                                // Create a pulse effect at the node location
+                                for (let i = 0; i < 8; i++) {
+                                    setTimeout(() => {
+                                        game.particles.emit(b.x + b.width/2, b.y + b.height/2, 
+                                                          '#10B981', 5, 10, [3, 6], 0.8);
+                                    }, i * 100);
+                                }
+                            }
                        }, index * 60); // Slightly slower stagger
                     });
+                    
                     setTimeout(() => terminalInput.focus(), game.buildings.length * 60 + 150);
                 } else {
                     typeLine(">> Usage: scan network", { className: 'warn' }, () => terminalInput.focus());
@@ -473,6 +774,54 @@
           case 'exit':
               typeLine(">> Disconnecting...", { className: 'warn' });
               setTimeout(hideTerminal, 500);
+              break;
+          case 'lock':
+              if (!node) { typeLine(">> ERROR: Connect to a node first.", { className: 'error' }, () => terminalInput.focus()); break; }
+              
+              // Check if node is already locked
+              if (node.locked) {
+                  typeLine(">> Node is already locked.", { className: 'warn' }, () => terminalInput.focus());
+                  break;
+              }
+              
+              typeLine(">> Enter password to lock this node (format: 'confirm password'):", { className: 'system' });
+              
+              // Create a temporary command handler for the confirmation
+              const originalHandler = handleCommand;
+              handleCommand = function(confirmCmd) {
+                  typeLine(`> ${confirmCmd}`, { className: 'input', delay: 1 });
+                  
+                  const confirmArgs = confirmCmd.toLowerCase().split(' ');
+                  if (confirmArgs[0] === 'confirm' && confirmArgs.length >= 2) {
+                      const password = confirmArgs[1];
+                      
+                      // Store the password (in a real system, you'd hash this)
+                      node.unlockPassword = password;
+                      node.locked = true;
+                      
+                      typeLine(">> Node successfully locked. Password set.", { className: 'success' });
+                      setTimeout(() => {
+                          // Visual feedback for locking
+                          game.particles.emit(node.x + node.width/2, 
+                                            node.y + node.height/2, 
+                                            '#EF4444', 5, 10, [2, 4], 1.2);
+                          
+                          // Reset command handler and disconnect
+                          handleCommand = originalHandler;
+                          typeLine(">> Disconnecting from locked node...", { className: 'warn' });
+                          setTimeout(() => {
+                              hideTerminal();
+                          }, 800);
+                      }, 1000);
+                  } else if (confirmArgs[0] === 'cancel') {
+                      typeLine(">> Lock operation cancelled.", { className: 'info' });
+                      handleCommand = originalHandler;
+                      terminalInput.focus();
+                  } else {
+                      typeLine(">> Invalid format. Use 'confirm PASSWORD' to set lock password or 'cancel' to abort.", { className: 'warn' });
+                      terminalInput.focus();
+                  }
+              };
               break;
           default:
               typeLine(`>> COMMAND UNRECOGNIZED: "${fullCmdText}"`, { className: 'error' }, () => terminalInput.focus());
@@ -608,9 +957,36 @@
             });
              placedPositions.push({ x: centerX, y: centerY }); // Store center point for distance check
         }
-        console.log("Generated Buildings:", nodes);
+        // Buildings generated successfully
         return nodes;
     }
+
+    // Tool descriptions for tooltips
+    const TOOL_DESCRIPTIONS = {
+        // Home tools
+        'diagnostic_suite': 'Analyzes network health and identifies issues with connections.',
+        'focus_recharge': 'Restores focus energy to continue operations.',
+        
+        // Code tools
+        'compile': 'Transforms code into executable format for other nodes.',
+        'lint': 'Checks code for errors and improves quality.',
+        'refactor': 'Restructures code for better performance without changing behavior.',
+        
+        // Data tools
+        'parse': 'Extracts meaningful information from raw data.',
+        'validate': 'Ensures data meets required format and quality standards.',
+        'transform': 'Converts data between different formats.',
+        
+        // ETL tools
+        'extract': 'Pulls data from source systems for processing.',
+        'route': 'Directs data flows between different nodes.',
+        'load_balance': 'Distributes workloads evenly across the network.',
+        
+        // Storage tools
+        'archive': 'Compresses and stores data for long-term retention.',
+        'retrieve': 'Recovers stored data from archives.',
+        'checksum': 'Verifies data integrity to prevent corruption.'
+    };
 
     // --- Building Info Box Functions ---
     function showBuildingInfo(building) {
@@ -618,30 +994,31 @@
         document.getElementById('info-name').textContent = building.name || "Unknown Node";
         document.getElementById('info-type').innerHTML = `<strong>Type:</strong> ${building.type.toUpperCase()}`;
         document.getElementById('info-desc').innerHTML = `<strong>Desc:</strong> ${building.description || "No data available."}`;
-
+        
         const toolsList = document.getElementById('info-tools');
         toolsList.innerHTML = '';
-        if (building.tools && building.tools.length > 0) {
+        
+        // Add tools with tooltips
+        if (building.tools && building.tools.length) {
             building.tools.forEach(tool => {
                 const li = document.createElement('li');
-                li.textContent = tool;
+                li.className = 'tooltip';
+                li.innerHTML = `${tool} <span class="tooltiptext">${TOOL_DESCRIPTIONS[tool] || 'No description available'}</span>`;
                 toolsList.appendChild(li);
             });
         } else {
-             const li = document.createElement('li');
-             li.textContent = "None specific";
-             li.style.fontStyle = 'italic'; li.style.opacity = '0.7';
-             toolsList.appendChild(li);
+            const li = document.createElement('li');
+            li.textContent = 'No tools available';
+            toolsList.appendChild(li);
         }
-
-        const inputs = building.connections?.input?.join(', ').toUpperCase() || 'None';
-        const outputs = building.connections?.output?.join(', ').toUpperCase() || 'None';
-        document.getElementById('info-connections').innerHTML = `<strong>Input:</strong> ${inputs} | <strong>Output:</strong> ${outputs}`;
-
+        
+        // Show connection info
+        document.getElementById('info-connections').innerHTML = `<strong>Input:</strong> ${building.connections?.input?.join(', ') || 'none'} | <strong>Output:</strong> ${building.connections?.output?.join(', ') || 'none'}`;
+        
         const statusText = building.locked ? 'LOCKED' : building.active ? 'ACTIVE' : building.processing ? 'PROCESSING' : 'IDLE';
         const statusColor = building.locked ? colors.accent : building.active ? colors.accent : building.processing ? colors.network : colors.player;
          document.getElementById('info-status').innerHTML = `<strong>Status:</strong> <span style="color:${statusColor}; font-weight: bold;">${statusText}</span>`;
-
+        
         buildingInfoBox.style.display = 'block';
     }
 
@@ -727,19 +1104,335 @@
         }
     });
 
-    // --- Canvas Click Listeners ---
+    // --- Node Tooltip System ---
+    const nodeTooltip = document.createElement('div');
+    nodeTooltip.className = 'node-tooltip';
+    nodeTooltip.style.display = 'none';
+    nodeTooltip.style.position = 'absolute';
+    nodeTooltip.style.zIndex = '1000';
+    nodeTooltip.style.pointerEvents = 'none';
+    document.body.appendChild(nodeTooltip);
+
+    // --- Camera Controls ---
+    let isDragging = false;
+    let lastMouseX = 0;
+    let lastMouseY = 0;
+    
+    // Helper functions for IO tooltips
+    function getCompatibleTypes(nodeType, connectionType) {
+      // Define compatibility between different node types
+      const compatibility = {
+        'data_source': { input: [], output: ['processor', 'visualizer', 'storage'] },
+        'processor': { input: ['data_source', 'processor'], output: ['processor', 'visualizer', 'storage'] },
+        'visualizer': { input: ['data_source', 'processor'], output: [] },
+        'storage': { input: ['data_source', 'processor'], output: ['processor', 'visualizer'] },
+        'security': { input: ['data_source', 'processor', 'storage'], output: ['processor'] }
+      };
+      
+      // Get friendly names for the compatible types
+      const typeToName = {
+        'data_source': 'Data Sources',
+        'processor': 'Processors',
+        'visualizer': 'Visualizers',
+        'storage': 'Storage Nodes',
+        'security': 'Security Nodes'
+      };
+      
+      const compatibleTypes = compatibility[nodeType][connectionType] || [];
+      if (compatibleTypes.length === 0) {
+        return connectionType === 'input' ? 'No inputs accepted' : 'No outputs provided';
+      }
+      
+      return compatibleTypes.map(type => typeToName[type]).join(', ');
+    }
+    
+    function getOutputType(nodeType) {
+      // Define what kind of data each node type outputs
+      const outputTypes = {
+        'data_source': 'Raw Data',
+        'processor': 'Processed Data',
+        'visualizer': 'Visual Feedback',
+        'storage': 'Stored Data',
+        'security': 'Security Tokens'
+      };
+      
+      return outputTypes[nodeType] || 'Unknown';
+    }
+    
+    // Add mouse wheel zoom control
+    canvas.addEventListener('wheel', function(e) {
+      e.preventDefault();
+      
+      // Get mouse position in world coordinates before zoom
+      const rect = canvas.getBoundingClientRect();
+      const mouseX = e.clientX - rect.left;
+      const mouseY = e.clientY - rect.top;
+      const worldPos = game.camera.screenToWorld(mouseX, mouseY);
+      
+      // Adjust zoom level based on wheel direction
+      const zoomFactor = e.deltaY > 0 ? 0.9 : 1.1; // Zoom out or in
+      game.camera.zoom = Math.max(game.camera.minZoom, 
+                       Math.min(game.camera.maxZoom, 
+                                game.camera.zoom * zoomFactor));
+      
+      // If zooming in, temporarily disable camera following
+      if (e.deltaY < 0 && game.camera.followPlayer) {
+        game.camera.followPlayer = false;
+        
+        // Show a message about camera controls
+        const message = document.createElement('div');
+        message.className = 'camera-message';
+        message.textContent = 'Camera unlocked. Use middle mouse to pan, double-click to re-center.';
+        message.style.position = 'absolute';
+        message.style.top = '120px';
+        message.style.left = '50%';
+        message.style.transform = 'translateX(-50%)';
+        message.style.backgroundColor = 'rgba(31, 41, 55, 0.8)';
+        message.style.color = '#F9FAFB';
+        message.style.padding = '8px 12px';
+        message.style.borderRadius = '4px';
+        message.style.zIndex = '1000';
+        message.style.pointerEvents = 'none';
+        document.body.appendChild(message);
+        
+        // Remove the message after 3 seconds
+        setTimeout(() => {
+          document.body.removeChild(message);
+        }, 3000);
+      }
+    });
+    
+    // Add middle mouse button panning
+    canvas.addEventListener('mousedown', function(e) {
+      if (e.button === 1) { // Middle mouse button
+        e.preventDefault();
+        isDragging = true;
+        lastMouseX = e.clientX;
+        lastMouseY = e.clientY;
+        game.camera.followPlayer = false; // Disable camera following when panning
+        canvas.style.cursor = 'grabbing';
+      }
+    });
+    
+    // Create IO tooltips container if it doesn't exist
+    let ioTooltip = document.getElementById('io-tooltip');
+    if (!ioTooltip) {
+      ioTooltip = document.createElement('div');
+      ioTooltip.id = 'io-tooltip';
+      ioTooltip.style.position = 'absolute';
+      ioTooltip.style.backgroundColor = 'rgba(31, 41, 55, 0.95)';
+      ioTooltip.style.color = '#F9FAFB';
+      ioTooltip.style.padding = '8px 12px';
+      ioTooltip.style.borderRadius = '4px';
+      ioTooltip.style.fontSize = '14px';
+      ioTooltip.style.maxWidth = '250px';
+      ioTooltip.style.boxShadow = '0 2px 10px rgba(0, 0, 0, 0.5)';
+      ioTooltip.style.zIndex = '1000';
+      ioTooltip.style.display = 'none';
+      ioTooltip.style.border = '2px solid #4B5563';
+      document.body.appendChild(ioTooltip);
+    }
+    
+    canvas.addEventListener('mousemove', function(e) {
+      const rect = canvas.getBoundingClientRect();
+      const mouseX = e.clientX - rect.left;
+      const mouseY = e.clientY - rect.top;
+      
+      // Handle panning if middle mouse is pressed
+      if (isDragging) {
+        const dx = e.clientX - lastMouseX;
+        const dy = e.clientY - lastMouseY;
+        
+        // Move camera in the opposite direction of mouse movement
+        game.camera.x -= dx / game.camera.zoom;
+        game.camera.y -= dy / game.camera.zoom;
+        
+        lastMouseX = e.clientX;
+        lastMouseY = e.clientY;
+      }
+      
+      // Convert mouse position to world coordinates for building hover
+      const worldPos = game.camera.screenToWorld(mouseX, mouseY);
+      
+      // Check if mouse is over a building using world coordinates
+      let hoveredBuilding = null;
+      let isOverInput = false;
+      let isOverOutput = false;
+      
+      for (const b of game.buildings) {
+        if (worldPos.x >= b.x && worldPos.x <= b.x + b.width &&
+            worldPos.y >= b.y && worldPos.y <= b.y + b.height) {
+          hoveredBuilding = b;
+          
+          // Check if hovering over input area (left 20% of building)
+          if (worldPos.x <= b.x + (b.width * 0.2)) {
+            isOverInput = true;
+          }
+          // Check if hovering over output area (right 20% of building)
+          else if (worldPos.x >= b.x + (b.width * 0.8) && worldPos.y <= b.y + (b.height * 0.7)) {
+            isOverOutput = true;
+          }
+          
+          break;
+        }
+      }
+      
+      if (hoveredBuilding) {
+        const nodeInfo = BUILDING_DEFAULTS[hoveredBuilding.type];
+        
+        if (isOverInput) {
+          // Show input tooltip
+          ioTooltip.innerHTML = `
+            <div style="font-weight: bold; color: #60A5FA; margin-bottom: 5px;">Input Connection</div>
+            <div style="margin-bottom: 8px;">Connect output from other nodes to this input to process data.</div>
+            <div style="font-size: 12px; color: #9CA3AF;">Compatible with: ${getCompatibleTypes(hoveredBuilding.type, 'input')}</div>
+          `;
+          ioTooltip.style.display = 'block';
+          ioTooltip.style.left = (e.clientX + 15) + 'px';
+          ioTooltip.style.top = (e.clientY + 15) + 'px';
+          
+          // Show regular node tooltip but with reduced opacity
+          nodeTooltip.innerHTML = `
+            <div style="font-weight: bold; color: #A78BFA; margin-bottom: 5px;">${nodeInfo.name}</div>
+            <div style="margin-bottom: 8px;">${nodeInfo.description}</div>
+            <div style="font-size: 12px; color: #9CA3AF;">Tools: ${nodeInfo.tools.join(', ')}</div>
+          `;
+          nodeTooltip.style.display = 'block';
+          nodeTooltip.style.opacity = '0.5';
+          nodeTooltip.style.left = (e.clientX + 15) + 'px';
+          nodeTooltip.style.top = (e.clientY + 60) + 'px';
+        } 
+        else if (isOverOutput) {
+          // Show output tooltip
+          ioTooltip.innerHTML = `
+            <div style="font-weight: bold; color: #34D399; margin-bottom: 5px;">Output Connection</div>
+            <div style="margin-bottom: 8px;">Connect this output to other nodes' inputs to send processed data.</div>
+            <div style="font-size: 12px; color: #9CA3AF;">Provides: ${getOutputType(hoveredBuilding.type)}</div>
+          `;
+          ioTooltip.style.display = 'block';
+          ioTooltip.style.left = (e.clientX + 15) + 'px';
+          ioTooltip.style.top = (e.clientY + 15) + 'px';
+          
+          // Show regular node tooltip but with reduced opacity
+          nodeTooltip.innerHTML = `
+            <div style="font-weight: bold; color: #A78BFA; margin-bottom: 5px;">${nodeInfo.name}</div>
+            <div style="margin-bottom: 8px;">${nodeInfo.description}</div>
+            <div style="font-size: 12px; color: #9CA3AF;">Tools: ${nodeInfo.tools.join(', ')}</div>
+          `;
+          nodeTooltip.style.display = 'block';
+          nodeTooltip.style.opacity = '0.5';
+          nodeTooltip.style.left = (e.clientX + 15) + 'px';
+          nodeTooltip.style.top = (e.clientY + 60) + 'px';
+        } 
+        else {
+          // Show regular node tooltip
+          nodeTooltip.innerHTML = `
+            <div style="font-weight: bold; color: #A78BFA; margin-bottom: 5px;">${nodeInfo.name}</div>
+            <div style="margin-bottom: 8px;">${nodeInfo.description}</div>
+            <div style="font-size: 12px; color: #9CA3AF;">Tools: ${nodeInfo.tools.join(', ')}</div>
+          `;
+          nodeTooltip.style.display = 'block';
+          nodeTooltip.style.opacity = '1';
+          nodeTooltip.style.left = (e.clientX + 15) + 'px';
+          nodeTooltip.style.top = (e.clientY + 15) + 'px';
+          
+          // Hide IO tooltip
+          ioTooltip.style.display = 'none';
+        }
+      } else {
+        // Hide both tooltips if not over a building
+        nodeTooltip.style.display = 'none';
+        ioTooltip.style.display = 'none';
+      }
+    });
+    
+    canvas.addEventListener('mouseup', function(e) {
+      if (e.button === 1) { // Middle mouse button
+        isDragging = false;
+        canvas.style.cursor = 'default';
+      }
+    });
+    
+    canvas.addEventListener('mouseleave', function() {
+      isDragging = false;
+      canvas.style.cursor = 'default';
+      // Hide tooltip when mouse leaves canvas
+      nodeTooltip.style.display = 'none';
+    });
+    
+    // Double-click to move to a node or location, or reset camera
+    canvas.addEventListener('dblclick', function(e) {
+      const rect = canvas.getBoundingClientRect();
+      const mouseX = e.clientX - rect.left;
+      const mouseY = e.clientY - rect.top;
+      const worldPos = game.camera.screenToWorld(mouseX, mouseY);
+      
+      // Check if clicked on a building
+      let clickedOnBuilding = false;
+      for (const b of game.buildings) {
+        if (worldPos.x >= b.x && worldPos.x <= b.x + b.width &&
+            worldPos.y >= b.y && worldPos.y <= b.y + b.height) {
+          clickedOnBuilding = true;
+          // Move player to building center and connect
+          game.player.targetX = b.x + b.width/2;
+          game.player.targetY = b.y + b.height/2;
+          game.isMovingPlayer = true;
+          // Player moving to building
+          break;
+        }
+      }
+      
+      if (!clickedOnBuilding) {
+        // If holding Shift key while double-clicking, toggle camera follow mode
+        if (e.shiftKey) {
+          game.camera.followPlayer = !game.camera.followPlayer;
+          
+          // Show a message about camera mode
+          const message = document.createElement('div');
+          message.className = 'camera-message';
+          message.textContent = game.camera.followPlayer ? 
+            'Camera locked to player.' : 
+            'Camera unlocked. Use middle mouse to pan, double-click to move.';
+          message.style.position = 'absolute';
+          message.style.top = '120px';
+          message.style.left = '50%';
+          message.style.transform = 'translateX(-50%)';
+          message.style.backgroundColor = 'rgba(31, 41, 55, 0.8)';
+          message.style.color = '#F9FAFB';
+          message.style.padding = '8px 12px';
+          message.style.borderRadius = '4px';
+          message.style.zIndex = '1000';
+          message.style.pointerEvents = 'none';
+          document.body.appendChild(message);
+          
+          // Remove the message after 2 seconds
+          setTimeout(() => {
+            document.body.removeChild(message);
+          }, 2000);
+        } else {
+          // Move player to clicked location
+          game.player.targetX = worldPos.x;
+          game.player.targetY = worldPos.y;
+          game.isMovingPlayer = true;
+        }
+      }
+    });
+
     canvas.addEventListener('click', (e) => {
         if (game.isMovingPlayer) return;
 
         const rect = canvas.getBoundingClientRect();
         const clickX = e.clientX - rect.left;
         const clickY = e.clientY - rect.top;
+        
+        // Convert screen coordinates to world coordinates
+        const worldPos = game.camera.screenToWorld(clickX, clickY);
 
         let clickedBuilding = null;
         for (const b of game.buildings) {
-            // Click detection based on the old drawing logic (top-left origin)
-            if (clickX >= b.x && clickX <= b.x + b.width &&
-                clickY >= b.y && clickY <= b.y + b.height) {
+            // Click detection using world coordinates
+            if (worldPos.x >= b.x && worldPos.x <= b.x + b.width &&
+                worldPos.y >= b.y && worldPos.y <= b.y + b.height) {
                 clickedBuilding = b;
                 break;
             }
@@ -778,25 +1471,36 @@
 
     // --- Drawing Functions (Updates) ---
     function drawPlayer(x, y, size, rotation) {
-      // ... Keep the current drawPlayer function ...
       ctx.save();
-      ctx.translate(x, y);
-      ctx.rotate(rotation);
+      ctx.translate(game.player.x, game.player.y);
+      ctx.rotate(game.player.rotation);
+      
       // Main body (triangle)
       ctx.beginPath();
-      ctx.moveTo(size * 0.8, 0); ctx.lineTo(-size * 0.6, -size * 0.5);
-      ctx.lineTo(-size * 0.4, 0); ctx.lineTo(-size * 0.6, size * 0.5);
+      ctx.moveTo(game.player.size * 0.8, 0);
+      ctx.lineTo(-game.player.size * 0.6, -game.player.size * 0.5);
+      ctx.lineTo(-game.player.size * 0.4, 0);
+      ctx.lineTo(-game.player.size * 0.6, game.player.size * 0.5);
       ctx.closePath();
+      
       ctx.fillStyle = colors.player;
-      ctx.shadowColor = colors.player; ctx.shadowBlur = 15;
+      ctx.shadowColor = colors.player;
+      ctx.shadowBlur = 15;
       ctx.fill();
+      
       // Outline
-      ctx.strokeStyle = '#E5E7EB'; ctx.lineWidth = 1.5;
+      ctx.strokeStyle = '#E5E7EB';
+      ctx.lineWidth = 1.5;
       ctx.stroke();
+      
       // Cockpit line
-      ctx.beginPath(); ctx.moveTo(size * 0.3, 0); ctx.lineTo(size * 0.1, 0);
-      ctx.strokeStyle = 'rgba(229, 231, 235, 0.5)'; ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(game.player.size * 0.3, 0);
+      ctx.lineTo(game.player.size * 0.1, 0);
+      ctx.strokeStyle = 'rgba(229, 231, 235, 0.5)';
+      ctx.lineWidth = 2;
       ctx.stroke();
+      
       ctx.restore();
     }
 
@@ -827,11 +1531,40 @@
 function drawBuilding(b) {
   ctx.save();
   ctx.translate(b.x, b.y);
+  
+  // Task highlight - add a pulsing outline if this building is part of the current task
+  let isTaskNode = false;
+  if (game.mode === 'challenge' && game.currentTask) {
+    if ((game.currentTask.srcBuilding === b) || 
+        (game.currentTask.tgtBuilding === b) || 
+        (game.currentTask.midBuilding === b)) {
+      isTaskNode = true;
+      const pulseIntensity = 0.5 + 0.5 * Math.sin(Date.now() / 300);
+      
+      // Draw task highlight glow
+      ctx.shadowColor = game.currentTask.srcBuilding === b ? '#60A5FA' : 
+                       game.currentTask.tgtBuilding === b ? '#34D399' : '#F59E0B';
+      ctx.shadowBlur = 15 + 10 * pulseIntensity;
+      
+      // Draw task indicator text above building
+      ctx.font = 'bold 14px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillStyle = game.currentTask.srcBuilding === b ? '#60A5FA' : 
+                     game.currentTask.tgtBuilding === b ? '#34D399' : '#F59E0B';
+      ctx.fillText(
+        game.currentTask.srcBuilding === b ? 'SOURCE' : 
+        game.currentTask.tgtBuilding === b ? 'TARGET' : 'MIDDLE',
+        b.width/2, -15
+      );
+    }
+  }
+  
   // Glow for active/processing
-  if (b.active || b.processing) {
+  if (!isTaskNode && (b.active || b.processing)) {
     ctx.shadowColor = colors.accent;
     ctx.shadowBlur = 24 + 8 * Math.sin(Date.now()/200);
   }
+  
   ctx.fillStyle = b.color || '#888';
   ctx.strokeStyle = 'rgba(255,255,255,0.7)';
   ctx.lineWidth = 2;
@@ -863,6 +1596,32 @@ function drawBuilding(b) {
     }
     ctx.stroke();
   }
+  
+  // Draw input/output indicators
+  // Input indicator (left side)
+  ctx.fillStyle = 'rgba(255,255,255,0.7)';
+  ctx.beginPath();
+  ctx.moveTo(0, b.height/2 - 10);
+  ctx.lineTo(10, b.height/2);
+  ctx.lineTo(0, b.height/2 + 10);
+  ctx.closePath();
+  ctx.fill();
+  
+  // Output indicator (right side)
+  ctx.beginPath();
+  if (b.width * 0.7 > b.width - 10) {
+    // If notch is in the way, place indicator higher
+    ctx.moveTo(b.width, b.height * 0.3 - 10);
+    ctx.lineTo(b.width - 10, b.height * 0.3);
+    ctx.lineTo(b.width, b.height * 0.3 + 10);
+  } else {
+    ctx.moveTo(b.width, b.height/2 - 10);
+    ctx.lineTo(b.width - 10, b.height/2);
+    ctx.lineTo(b.width, b.height/2 + 10);
+  }
+  ctx.closePath();
+  ctx.fill();
+  
   // Node status dot
   ctx.beginPath();
   ctx.arc(b.width/2, b.height + 10, 7, 0, 2 * Math.PI);
@@ -879,7 +1638,90 @@ function drawBuilding(b) {
 
     // --- Update Loop ---
     function update() {
-      // Skip game logic update if terminal is active OR player is auto-moving
+      // Handle auto-movement to target position when double-clicking
+      if (game.isMovingPlayer) {
+        const dx = game.player.targetX - game.player.x;
+        const dy = game.player.targetY - game.player.y;
+        const distance = Math.sqrt(dx * dx + dy * dy);
+        
+        // If we're close enough to the target, stop moving
+        if (distance < 5) {
+          game.isMovingPlayer = false;
+          // If we reached a building, try to connect to it
+          for (const b of game.buildings) {
+            const bCenterX = b.x + b.width/2;
+            const bCenterY = b.y + b.height/2;
+            const dxB = game.player.x - bCenterX;
+            const dyB = game.player.y - bCenterY;
+            const distToBuilding = Math.sqrt(dxB * dxB + dyB * dyB);
+            
+            if (distToBuilding < 30) { // Close enough to connect
+              if (!b.locked) {
+                showTerminal(b);
+              } else {
+                // Visual feedback for locked node
+                game.particles.emit(bCenterX, bCenterY, colors.accent, 3, 8, [2,5], 0.8);
+              }
+              break;
+            }
+          }
+        } else {
+          // Move towards the target
+          const moveSpeed = Math.min(distance, game.player.speed);
+          const angle = Math.atan2(dy, dx);
+          game.player.x += Math.cos(angle) * moveSpeed;
+          game.player.y += Math.sin(angle) * moveSpeed;
+          game.player.rotation = angle;
+          
+          // Update pets when moving automatically too
+          game.pets.forEach(pet => {
+            const petAngle = game.player.rotation;
+            const rotatedOffsetX = pet.targetOffset.x * Math.cos(petAngle) - pet.targetOffset.y * Math.sin(petAngle);
+            const rotatedOffsetY = pet.targetOffset.x * Math.sin(petAngle) + pet.targetOffset.y * Math.cos(petAngle);
+            const targetX = game.player.x + rotatedOffsetX;
+            const targetY = game.player.y + rotatedOffsetY;
+            pet.x += (targetX - pet.x) * pet.lerpFactor;
+            pet.y += (targetY - pet.y) * pet.lerpFactor;
+            pet.rotation = petAngle;
+          });
+        }
+      }
+      
+      // Terminal Interaction Check (E key) - moved outside the movement block so it works all the time
+      if (game.keys['e'] && !terminalCooldown && !terminalActive) {
+          terminalCooldown = true;
+          setTimeout(() => terminalCooldown = false, 300);
+
+          let closestBuilding = null;
+          let minDistSq = Infinity; // Use squared distance for comparison efficiency
+
+          for (const b of game.buildings) {
+              // Check distance from player to building CENTER for interaction range
+              const dxB = game.player.x - (b.x + b.width / 2);
+              const dyB = game.player.y - (b.y + b.height / 2);
+              const distSq = dxB * dxB + dyB * dyB; // Squared distance
+              // Interaction radius based on building center + margin
+              const interactionRadius = Math.max(b.width, b.height) / 2 + 60;
+
+              if (distSq < interactionRadius * interactionRadius && distSq < minDistSq) {
+                   minDistSq = distSq;
+                   closestBuilding = b;
+              }
+          }
+
+          if (closestBuilding) {
+              if (!closestBuilding.locked) {
+                   showTerminal(closestBuilding);
+              } else {
+                   // Show locked terminal view instead
+                   showLockedTerminal(closestBuilding);
+                   // Visual feedback
+                   game.particles.emit(closestBuilding.x+closestBuilding.width/2, closestBuilding.y+closestBuilding.height/2, '#EF4444', 3, 8, [2,5], 0.8);
+              }
+          }
+      }
+      
+      // Skip regular game logic update if terminal is active OR player is auto-moving
       if (!terminalActive && !game.isMovingPlayer) {
           game.particles.update(); // *** UPDATE PARTICLES ***
 
@@ -954,39 +1796,6 @@ function drawBuilding(b) {
           const hue = ratio * 120; // 0 (red) to 120 (green)
           focusBar.style.backgroundColor = `hsl(${hue}, 80%, 45%)`;
           stats.textContent = `FCS: ${Math.floor(game.player.focus)}% | POS: ${Math.floor(game.player.x)}, ${Math.floor(game.player.y)}`;
-
-          // Terminal Interaction Check (E key)
-          if (game.keys['e'] && !terminalCooldown && !terminalActive) {
-              terminalCooldown = true;
-              setTimeout(() => terminalCooldown = false, 300);
-
-              let closestBuilding = null;
-              let minDistSq = Infinity; // Use squared distance for comparison efficiency
-
-              for (const b of game.buildings) {
-                  // Check distance from player to building CENTER for interaction range
-                  const dxB = game.player.x - (b.x + b.width / 2);
-                  const dyB = game.player.y - (b.y + b.height / 2);
-                  const distSq = dxB * dxB + dyB * dyB; // Squared distance
-                  // Interaction radius based on building center + margin
-                  const interactionRadius = Math.max(b.width, b.height) / 2 + 60;
-
-                  if (distSq < interactionRadius * interactionRadius && distSq < minDistSq) {
-                       minDistSq = distSq;
-                       closestBuilding = b;
-                  }
-              }
-
-              if (closestBuilding) {
-                  if (!closestBuilding.locked) {
-                       showTerminal(closestBuilding);
-                  } else {
-                       // Optional: Visual feedback for locked node interaction attempt
-                       console.log("Node is locked.");
-                       game.particles.emit(closestBuilding.x+closestBuilding.width/2, closestBuilding.y+closestBuilding.height/2, colors.accent, 3, 8, [2,5], 0.8);
-                  }
-              }
-          }
       } // End of if(!terminalActive && !game.isMovingPlayer) block
     }
 
@@ -995,12 +1804,45 @@ function draw() {
   // Clear canvas
   ctx.fillStyle = colors.background;
   ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-  // Draw Grid
-  ctx.strokeStyle = 'rgba(55, 65, 81, 0.5)'; ctx.lineWidth = 0.5;
-  const gridSize = 50;
-  for (let x = 0; x < canvas.width; x += gridSize) { ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, canvas.height); ctx.stroke(); }
-  for (let y = 0; y < canvas.height; y += gridSize) { ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(canvas.width, y); ctx.stroke(); }
+  
+  // Update camera to follow player
+  game.camera.update();
+  
+  // Save the context state before applying camera transformations
+  ctx.save();
+  
+  // Apply camera transformations
+  ctx.translate(canvas.width / 2, canvas.height / 2);
+  ctx.scale(game.camera.zoom, game.camera.zoom);
+  ctx.translate(-game.camera.x, -game.camera.y);
+  
+  // Draw Grid - now using world coordinates
+  ctx.strokeStyle = 'rgba(55, 65, 81, 0.3)'; ctx.lineWidth = 0.5;
+  const gridSize = 100;
+  
+  // Calculate grid boundaries based on camera position and zoom
+  const viewWidth = canvas.width / game.camera.zoom;
+  const viewHeight = canvas.height / game.camera.zoom;
+  const startX = Math.floor((game.camera.x - viewWidth/2) / gridSize) * gridSize;
+  const endX = Math.ceil((game.camera.x + viewWidth/2) / gridSize) * gridSize;
+  const startY = Math.floor((game.camera.y - viewHeight/2) / gridSize) * gridSize;
+  const endY = Math.ceil((game.camera.y + viewHeight/2) / gridSize) * gridSize;
+  
+  // Draw vertical grid lines
+  for (let x = startX; x <= endX; x += gridSize) { 
+    ctx.beginPath(); 
+    ctx.moveTo(x, startY); 
+    ctx.lineTo(x, endY); 
+    ctx.stroke(); 
+  }
+  
+  // Draw horizontal grid lines
+  for (let y = startY; y <= endY; y += gridSize) { 
+    ctx.beginPath(); 
+    ctx.moveTo(startX, y); 
+    ctx.lineTo(endX, y); 
+    ctx.stroke(); 
+  }
 
   // Draw Building Safe Zones (Still based on building center)
   for (const building of game.buildings) {
@@ -1017,7 +1859,7 @@ function draw() {
     ctx.setLineDash([]);
   }
 
-  // --- Enhanced: Draw Animated Network Links ---
+  // Draw Network Connections (between all buildings)
   ctx.save();
   ctx.strokeStyle = colors.network + 'B0'; ctx.lineWidth = 2; ctx.setLineDash([8, 12]);
   for (let i = 0; i < game.buildings.length; i++) {
@@ -1029,11 +1871,11 @@ function draw() {
       ctx.stroke();
       // Animate packet if edge is active
       if ((b1.active || b2.active || networkScanActive)) {
-        let t = ((Date.now()/400) % 1);
-        let px = (b1.x + b1.width/2) + (b2.x + b2.width/2 - (b1.x + b1.width/2)) * t;
-        let py = (b1.y + b1.height/2) + (b2.y + b2.height/2 - (b1.y + b1.height/2)) * t;
+        const animTime = ((Date.now()/400) % 1);
+        const packetX = (b1.x + b1.width/2) + (b2.x + b2.width/2 - (b1.x + b1.width/2)) * animTime;
+        const packetY = (b1.y + b1.height/2) + (b2.y + b2.height/2 - (b1.y + b1.height/2)) * animTime;
         ctx.beginPath();
-        ctx.arc(px, py, 7, 0, 2 * Math.PI);
+        ctx.arc(packetX, packetY, 7, 0, 2 * Math.PI);
         ctx.fillStyle = b1.active || b2.active ? colors.accent : colors.network;
         ctx.globalAlpha = 0.7;
         ctx.fill();
@@ -1043,43 +1885,503 @@ function draw() {
   }
   ctx.restore();
   ctx.setLineDash([]);
-
-  // Draw Buildings (Enhanced: glow if active/processing)
-  game.buildings.forEach(drawBuilding);
+  
+  // Draw all buildings
+  for (const b of game.buildings) {
+    drawBuilding(b);
+  }
+  
+  // Draw connections between active nodes
+  if (game.connections.length > 0) {
+    // Draw stored connections
+    for (const connection of game.connections) {
+      const from = connection.from;
+      const to = connection.to;
+      
+      if (from.active && to.active) {
+        // Pulse effect based on time
+        const pulseSpeed = 2000; // ms for one complete cycle
+        const timeSinceEstablished = Date.now() - connection.established;
+        const pulsePhase = (timeSinceEstablished % pulseSpeed) / pulseSpeed;
+        
+        // Draw the main connection line
+        ctx.strokeStyle = colors.network;
+        ctx.lineWidth = 2;
+        ctx.setLineDash([5, 5]); // Dashed lines
+        ctx.beginPath();
+        ctx.moveTo(from.x + from.width/2, from.y + from.height/2);
+        ctx.lineTo(to.x + to.width/2, to.y + to.height/2);
+        ctx.stroke();
+        
+        // Draw pulse dot moving along the line
+        const fromX = from.x + from.width/2;
+        const fromY = from.y + from.height/2;
+        const toX = to.x + to.width/2;
+        const toY = to.y + to.height/2;
+        
+        // Calculate position along the line (0 to 1)
+        const pulsePosition = (pulsePhase + 1) / 2; // Convert -1 to 1 range to 0 to 1
+        const pulseX = fromX + (toX - fromX) * pulsePosition;
+        const pulseY = fromY + (toY - fromY) * pulsePosition;
+        
+        // Draw pulse
+        ctx.fillStyle = colors.accent;
+        ctx.beginPath();
+        ctx.arc(pulseX, pulseY, 4, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+    
+    ctx.setLineDash([]); // Reset to solid lines
+  }
 
   // Draw Pets
-  game.pets.forEach(drawPet);
+  for (const pet of game.pets) {
+    drawPet(pet);
+  }
 
   // Draw Player
-  drawPlayer(game.player.x, game.player.y, game.player.size, game.player.rotation);
+  drawPlayer();
 
   // Draw Particles
   game.particles.draw(ctx);
   
-  // --- Minimal Legend ---
+  // Draw task path indicator if in challenge mode (inside camera transform)
+  if (game.mode === 'challenge' && game.currentTask && !game.currentTask.completed) {
+    drawTaskPathIndicator();
+  }
+  
+  // Restore the context to remove camera transformations
+  ctx.restore();
+  
+  // Draw mini-map in the corner (outside the camera transform)
+  drawMiniMap();
+  
+  // Draw first step instruction (outside camera transform)
+  if (game.mode === 'challenge' && game.currentTask && !game.currentTask.completed) {
+    ctx.save();
+    ctx.font = 'bold 16px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillStyle = '#FFFFFF';
+    
+    // Create instruction text with drop shadow for better visibility
+    const instructionText = `First: Go to the SOURCE node (${BUILDING_DEFAULTS[game.currentTask.srcType].name})`;
+    ctx.shadowColor = 'rgba(0, 0, 0, 0.8)';
+    ctx.shadowBlur = 5;
+    ctx.shadowOffsetX = 2;
+    ctx.shadowOffsetY = 2;
+    
+    // Position at top center of screen
+    ctx.fillText(instructionText, canvas.width / 2, 30);
+    ctx.restore();
+  }
+  
+  // Draw legend in top-right corner
   ctx.save();
   ctx.font = '14px monospace';
+  ctx.textBaseline = 'middle';
   ctx.globalAlpha = 0.8;
   ctx.fillStyle = '#18181b';
-  ctx.fillRect(18, 30, 162, 74);
+  const legendX = canvas.width - 180;
+  ctx.fillRect(legendX, 30, 162, 92);
   ctx.globalAlpha = 1;
-  ctx.fillStyle = colors.player; ctx.fillText('▲ Player', 30, 50);
-  ctx.fillStyle = colors.accent; ctx.fillText('● Active Node', 30, 68);
-  ctx.fillStyle = colors.network; ctx.fillText('━ Pipeline', 30, 86);
-  ctx.fillStyle = '#E5E7EB'; ctx.fillText('○ Idle Node', 30, 104);
+  ctx.fillStyle = colors.player; ctx.fillText('▲ Player', legendX + 12, 50);
+  ctx.fillStyle = colors.accent; ctx.fillText('● Active Node', legendX + 12, 68);
+  ctx.fillStyle = colors.network; ctx.fillText('━ Pipeline', legendX + 12, 86);
+  ctx.fillStyle = '#E5E7EB'; ctx.fillText('○ Idle Node', legendX + 12, 104);
+  ctx.fillStyle = '#EF4444'; ctx.fillText('● Locked Node', legendX + 12, 122);
+  ctx.restore();
+  
+  // Draw controls help in bottom left
+  ctx.save();
+  ctx.font = '14px monospace';
+  ctx.textBaseline = 'middle';
+  ctx.globalAlpha = 0.8;
+  ctx.fillStyle = '#18181b';
+  ctx.fillRect(18, canvas.height - 100, 220, 80);
+  ctx.globalAlpha = 1;
+  ctx.fillStyle = '#F9FAFB';
+  ctx.fillText('Controls:', 30, canvas.height - 80);
+  ctx.fillStyle = '#D1D5DB';
+  ctx.fillText('WASD/Arrows: Move', 30, canvas.height - 60);
+  ctx.fillText('Double-click: Move to node', 30, canvas.height - 40);
+  ctx.fillText('Mouse wheel: Zoom in/out', 30, canvas.height - 20);
   ctx.restore();
 }
 
-    // --- Game Loop ---
-    function gameLoop() {
-      update();
-      draw();
-      requestAnimationFrame(gameLoop);
+// Draw a mini-map in the corner
+function drawMiniMap() {
+  const mapSize = 150;
+  const mapX = canvas.width - mapSize - 20;
+  const mapY = canvas.height - mapSize - 20;
+  const mapScale = 0.1;
+  
+  // Draw mini-map background
+  ctx.fillStyle = 'rgba(31, 41, 55, 0.8)';
+  ctx.fillRect(mapX, mapY, mapSize, mapSize);
+  ctx.strokeStyle = '#4B5563';
+  ctx.lineWidth = 2;
+  ctx.strokeRect(mapX, mapY, mapSize, mapSize);
+  
+  // Draw buildings on mini-map
+  for (const b of game.buildings) {
+    // Highlight task buildings on minimap
+    if (game.mode === 'challenge' && game.currentTask && 
+        (game.currentTask.srcBuilding === b || 
+         game.currentTask.tgtBuilding === b || 
+         game.currentTask.midBuilding === b)) {
+      ctx.fillStyle = game.currentTask.srcBuilding === b ? '#60A5FA' : 
+                     game.currentTask.tgtBuilding === b ? '#34D399' : '#F59E0B';
+      const miniX = mapX + (b.x * mapScale) + mapSize/2 - (game.camera.x * mapScale);
+      const miniY = mapY + (b.y * mapScale) + mapSize/2 - (game.camera.y * mapScale);
+      ctx.fillRect(miniX - 3, miniY - 3, 6, 6);
+    } else {
+      ctx.fillStyle = b.color || '#888';
+      const miniX = mapX + (b.x * mapScale) + mapSize/2 - (game.camera.x * mapScale);
+      const miniY = mapY + (b.y * mapScale) + mapSize/2 - (game.camera.y * mapScale);
+      ctx.fillRect(miniX - 2, miniY - 2, 4, 4);
     }
+  }
+  
+  // Draw player on mini-map
+  ctx.fillStyle = colors.player;
+  const playerMiniX = mapX + (game.player.x * mapScale) + mapSize/2 - (game.camera.x * mapScale);
+  const playerMiniY = mapY + (game.player.y * mapScale) + mapSize/2 - (game.camera.y * mapScale);
+  ctx.beginPath();
+  ctx.arc(playerMiniX, playerMiniY, 3, 0, Math.PI * 2);
+  ctx.fill();
+  
+  // Draw viewport rectangle
+  ctx.strokeStyle = '#10B981';
+  ctx.lineWidth = 1;
+  const viewWidth = (canvas.width / game.camera.zoom) * mapScale;
+  const viewHeight = (canvas.height / game.camera.zoom) * mapScale;
+  ctx.strokeRect(
+    mapX + mapSize/2 - viewWidth/2,
+    mapY + mapSize/2 - viewHeight/2,
+    viewWidth,
+    viewHeight
+  );
+}
+
+// Draw a visual path indicator for the current task
+function drawTaskPathIndicator() {
+  if (!game.currentTask || !game.currentTask.srcBuilding || !game.currentTask.tgtBuilding) {
+    return;
+  }
+  
+  const src = game.currentTask.srcBuilding;
+  const tgt = game.currentTask.tgtBuilding;
+  const mid = game.currentTask.midBuilding;
+  
+  // Save context for path drawing
+  ctx.save();
+  
+  // Draw a path from player to source node if player is not close to any task node
+  const distToSrc = Math.hypot(game.player.x - src.x - src.width/2, game.player.y - src.y - src.height/2);
+  const distToMid = mid ? Math.hypot(game.player.x - mid.x - mid.width/2, game.player.y - mid.y - mid.height/2) : Infinity;
+  const distToTgt = Math.hypot(game.player.x - tgt.x - tgt.width/2, game.player.y - tgt.y - tgt.height/2);
+  
+  // If player is far from all task nodes, draw a path to the source
+  if (distToSrc > 100 && distToMid > 100 && distToTgt > 100) {
+    ctx.setLineDash([3, 8]);
+    ctx.lineWidth = 2;
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.6)';
+    
+    // Calculate source center in world coordinates
+    const srcCenterX = src.x + src.width/2;
+    const srcCenterY = src.y + src.height/2;
+    
+    // Draw path from player to source
+    ctx.beginPath();
+    ctx.moveTo(game.player.x, game.player.y);
+    ctx.lineTo(srcCenterX, srcCenterY);
+    ctx.stroke();
+    
+    // Draw animated arrows along the path
+    const arrowOffset = (Date.now() / 800) % 1;
+    drawAnimatedArrows(game.player.x, game.player.y, srcCenterX, srcCenterY, arrowOffset, 'rgba(255, 255, 255, 0.8)');
+  }
+  
+  // Draw the task path
+  ctx.setLineDash([5, 10]);
+  ctx.lineWidth = 3;
+  
+  // Draw path from source to target (or through middle if applicable)
+  if (mid) {
+    // Source to middle
+    ctx.beginPath();
+    ctx.strokeStyle = 'rgba(96, 165, 250, 0.5)'; // Blue
+    ctx.moveTo(src.x + src.width/2, src.y + src.height/2);
+    ctx.lineTo(mid.x + mid.width/2, mid.y + mid.height/2);
+    ctx.stroke();
+    
+    // Middle to target
+    ctx.beginPath();
+    ctx.strokeStyle = 'rgba(52, 211, 153, 0.5)'; // Green
+    ctx.moveTo(mid.x + mid.width/2, mid.y + mid.height/2);
+    ctx.lineTo(tgt.x + tgt.width/2, tgt.y + tgt.height/2);
+    ctx.stroke();
+  } else {
+    // Direct source to target
+    ctx.beginPath();
+    // Create gradient for the line
+    const gradient = ctx.createLinearGradient(
+      src.x + src.width/2, src.y + src.height/2,
+      tgt.x + tgt.width/2, tgt.y + tgt.height/2
+    );
+    gradient.addColorStop(0, 'rgba(96, 165, 250, 0.5)'); // Blue at start
+    gradient.addColorStop(1, 'rgba(52, 211, 153, 0.5)'); // Green at end
+    
+    ctx.strokeStyle = gradient;
+    ctx.moveTo(src.x + src.width/2, src.y + src.height/2);
+    ctx.lineTo(tgt.x + tgt.width/2, tgt.y + tgt.height/2);
+    ctx.stroke();
+  }
+  
+  // Draw animated arrows along the path
+  const arrowOffset = (Date.now() / 1000) % 1; // Value between 0 and 1 that cycles every second
+  
+  if (mid) {
+    // Arrows from source to middle
+    drawAnimatedArrows(src.x + src.width/2, src.y + src.height/2, 
+                      mid.x + mid.width/2, mid.y + mid.height/2, 
+                      arrowOffset, 'rgba(96, 165, 250, 0.8)');
+    
+    // Arrows from middle to target
+    drawAnimatedArrows(mid.x + mid.width/2, mid.y + mid.height/2, 
+                      tgt.x + tgt.width/2, tgt.y + tgt.height/2, 
+                      arrowOffset, 'rgba(52, 211, 153, 0.8)');
+  } else {
+    // Arrows directly from source to target
+    drawAnimatedArrows(src.x + src.width/2, src.y + src.height/2, 
+                      tgt.x + tgt.width/2, tgt.y + tgt.height/2, 
+                      arrowOffset, 'rgba(96, 165, 250, 0.8)');
+  }
+  
+  ctx.setLineDash([]);
+  ctx.restore();
+}
+
+// Helper function to draw animated arrows along a path
+function drawAnimatedArrows(x1, y1, x2, y2, offset, color) {
+  const dx = x2 - x1;
+  const dy = y2 - y1;
+  const distance = Math.sqrt(dx * dx + dy * dy);
+  const numArrows = Math.max(1, Math.floor(distance / 100));
+  
+  // Draw arrows along the path
+  for (let i = 0; i < numArrows; i++) {
+    const t = (i / numArrows + offset) % 1;
+    const arrowX = x1 + dx * t;
+    const arrowY = y1 + dy * t;
+    const angle = Math.atan2(dy, dx);
+    
+    ctx.save();
+    ctx.translate(arrowX, arrowY);
+    ctx.rotate(angle);
+    
+    // Draw arrow
+    ctx.fillStyle = color;
+    ctx.beginPath();
+    ctx.moveTo(0, 0);
+    ctx.lineTo(-10, -5);
+    ctx.lineTo(-7, 0);
+    ctx.lineTo(-10, 5);
+    ctx.closePath();
+    ctx.fill();
+    
+    ctx.restore();
+  }
+}
+    // --- Game Loop ---
+function gameLoop() {
+  update();
+  draw();
+  updateGameUI();
+  requestAnimationFrame(gameLoop);
+}
+
+// Update game UI elements
+function updateGameUI() {
+  // Only update challenge mode UI if in challenge mode
+  if (game.mode === 'challenge') {
+    // Update score display
+    document.getElementById('score').textContent = `Score: ${game.score}`;
+    document.getElementById('tasks-completed').textContent = `Tasks: ${game.completedTasks}`;
+    
+    // Update task timer if we have an active task
+    if (game.currentTask && !game.currentTask.completed) {
+      const elapsed = Date.now() - game.currentTask.startTime;
+      const remaining = Math.max(0, game.currentTask.timeLimit - elapsed);
+      const minutes = Math.floor(remaining / 60000);
+      const seconds = Math.floor((remaining % 60000) / 1000);
+      document.getElementById('task-timer').textContent = `Time: ${minutes}:${seconds.toString().padStart(2, '0')}`;
+      
+      // Time's up?
+      if (remaining <= 0 && !game.currentTask.completed) {
+        // Task failed
+        game.currentTask.completed = true;
+        if (terminalActive) {
+          typeLine(`>> Time's up! Task failed.`, { className: 'error' });
+          setTimeout(() => {
+            // Generate new task
+            game.currentTask = generateTask();
+            typeLine(`>> New ${game.currentTask.message}`, { className: 'system' });
+          }, 2000);
+        }
+      }
+    }
+  }
+  
+  // Check for sandbox mode progression
+  if (game.mode === 'sandbox') {
+    checkSandboxProgress();
+  }
+}
+
+// Function to check and progress through sandbox tutorial steps
+function checkSandboxProgress() {
+  if (game.currentSandboxStep >= game.sandboxSteps.length) return;
+  
+  const currentStep = game.sandboxSteps[game.currentSandboxStep];
+  
+  // Check if the current step is complete based on its type
+  let stepComplete = false;
+  
+  switch (currentStep.type) {
+    case 'welcome':
+      // Auto-advance after a few seconds
+      if (!currentStep.shown) {
+        currentStep.shown = true;
+        setTimeout(() => {
+          game.currentSandboxStep++;
+        }, 5000);
+      }
+      break;
+      
+    case 'movement':
+      // Complete when player moves
+      if (game.player.x !== 400 || game.player.y !== 300) {
+        stepComplete = true;
+      }
+      break;
+      
+    case 'connect':
+      // Complete when terminal is opened
+      if (terminalActive) {
+        stepComplete = true;
+      }
+      break;
+      
+    case 'help':
+      // Check if help command was used
+      if (terminalActive && commandHistory.some(cmd => cmd.toLowerCase() === 'help')) {
+        stepComplete = true;
+      }
+      break;
+      
+    case 'tools':
+      // Check if list tools command was used
+      if (terminalActive && commandHistory.some(cmd => cmd.toLowerCase() === 'list tools')) {
+        stepComplete = true;
+      }
+      break;
+      
+    case 'send':
+      // Check if send command was attempted
+      if (terminalActive && commandHistory.some(cmd => cmd.toLowerCase().startsWith('send'))) {
+        stepComplete = true;
+      }
+      break;
+      
+    case 'connection':
+      // Check if a connection was made
+      if (game.connections.length > 0) {
+        stepComplete = true;
+      }
+      break;
+      
+    case 'complete':
+      // This is the final step, no auto-advancement
+      break;
+  }
+  
+  // Advance to next step if current step is complete
+  if (stepComplete) {
+    game.currentSandboxStep++;
+    
+    // Show the next step's guidance
+    if (game.currentSandboxStep < game.sandboxSteps.length) {
+      const nextStep = game.sandboxSteps[game.currentSandboxStep];
+      if (terminalActive) {
+        typeLine(`>> ${nextStep.message}`, { className: 'system' });
+      }
+    }
+  }
+}
 
     // --- Initial Setup ---
     resize(); // Initial resize to set canvas dimensions
     game.buildings = generateBuildings(7); // Generate buildings after resize
+    
+    // Mode switching functionality
+    const sandboxBtn = document.getElementById('sandbox-mode');
+    const challengeBtn = document.getElementById('challenge-mode');
+    const gameStats = document.getElementById('game-stats');
+    
+    sandboxBtn.addEventListener('click', () => {
+      if (game.mode !== 'sandbox') {
+        // Switch to sandbox mode
+        game.mode = 'sandbox';
+        sandboxBtn.classList.add('active');
+        challengeBtn.classList.remove('active');
+        gameStats.style.display = 'none';
+        
+        // Reset sandbox progress
+        game.currentSandboxStep = 0;
+        
+        // Show welcome message if terminal is active
+        if (terminalActive) {
+          typeLine(`>> ${game.sandboxSteps[0].message}`, { className: 'system' });
+        }
+      }
+    });
+    
+    challengeBtn.addEventListener('click', () => {
+      if (game.mode !== 'challenge') {
+        // Switch to challenge mode
+        game.mode = 'challenge';
+        challengeBtn.classList.add('active');
+        sandboxBtn.classList.remove('active');
+        gameStats.style.display = 'block';
+        
+        // Always reset the task and timer when switching to challenge mode
+        // This gives users a fresh 2 minutes for each attempt
+        game.currentTask = generateTask();
+        game.currentTask.startTime = Date.now(); // Reset the timer
+        
+        // Show challenge intro if terminal is active
+        if (terminalActive) {
+          typeLine(`>> Challenge Mode activated! You have 2 minutes for this attempt.`, { className: 'system' });
+          typeLine(`>> ${game.currentTask.message}`, { className: 'system' });
+          typeLine(`>> Tip: Switch back to Sandbox mode anytime to learn more about the nodes.`, { className: 'info' });
+        }
+      }
+    });
+    
+    // Initialize based on starting mode
+    if (game.mode === 'sandbox') {
+      // Show first sandbox step when terminal is first opened
+      // This is handled in the showTerminal override
+    } else {
+      // Initialize challenge mode
+      game.currentTask = generateTask();
+      gameStats.style.display = 'block';
+      sandboxBtn.classList.remove('active');
+      challengeBtn.classList.add('active');
+    }
 
     // --- Terminal Resize Logic ---
     (function() {
@@ -1115,35 +2417,262 @@ function draw() {
       });
     })();
 
-    // --- Initial Pipeline Task Logic ---
-    function randomPipelineTask() {
+    // --- Game Progression System ---
+    function generateTask() {
         // Pick random source and target nodes of different types
         const types = Object.keys(BUILDING_DEFAULTS);
         let srcType, tgtType, midType;
+        
+        // Get available (unlocked) buildings of each type
+        const availableBuildings = {};
+        types.forEach(type => {
+            availableBuildings[type] = game.buildings.filter(b => b.type === type && !b.locked);
+        });
+        
+        // Filter to types that have at least one unlocked building
+        const availableTypes = types.filter(type => availableBuildings[type].length > 0);
+        
+        // If we don't have at least 2 different available types, unlock some buildings
+        if (availableTypes.length < 2) {
+            // Unlock a data_source and a processor if none are available
+            const toUnlock = ['data_source', 'processor'];
+            toUnlock.forEach(type => {
+                const lockedBuilding = game.buildings.find(b => b.type === type && b.locked);
+                if (lockedBuilding) {
+                    lockedBuilding.locked = false;
+                    // Add visual feedback
+                    game.particles.emit(lockedBuilding.x + lockedBuilding.width/2, 
+                                      lockedBuilding.y + lockedBuilding.height/2, 
+                                      '#10B981', 10, 20, [2,5], 1.5);
+                }
+            });
+        }
+        
+        // Recalculate available buildings
+        types.forEach(type => {
+            availableBuildings[type] = game.buildings.filter(b => b.type === type && !b.locked);
+        });
+        
+        // Update available types
+        const updatedAvailableTypes = types.filter(type => availableBuildings[type].length > 0);
+        
+        // Choose source and target types from available types
         do {
-            srcType = types[Math.floor(Math.random() * types.length)];
-            tgtType = types[Math.floor(Math.random() * types.length)];
+            srcType = updatedAvailableTypes[Math.floor(Math.random() * updatedAvailableTypes.length)];
+            tgtType = updatedAvailableTypes[Math.floor(Math.random() * updatedAvailableTypes.length)];
         } while (srcType === tgtType);
-        // Optionally, pick a mid pipeline node (e.g., 'etl', 'code', etc.)
-        const midTypes = types.filter(t => t !== srcType && t !== tgtType);
-        midType = midTypes.length ? midTypes[Math.floor(Math.random() * midTypes.length)] : null;
-        // Compose the task (plain text, no HTML)
-        if (midType && Math.random() > 0.5) {
-            return `Task: Build a pipeline from ${BUILDING_DEFAULTS[srcType].name} to ${BUILDING_DEFAULTS[tgtType].name} using the ${BUILDING_DEFAULTS[midType].name}.`;
+        
+        // Choose specific buildings for source and target
+        const srcBuilding = availableBuildings[srcType][Math.floor(Math.random() * availableBuildings[srcType].length)];
+        const tgtBuilding = availableBuildings[tgtType][Math.floor(Math.random() * availableBuildings[tgtType].length)];
+        
+        // Optionally, pick a mid pipeline node type
+        const midTypes = updatedAvailableTypes.filter(t => t !== srcType && t !== tgtType);
+        midType = midTypes.length && Math.random() > 0.5 ? midTypes[Math.floor(Math.random() * midTypes.length)] : null;
+        
+        // Choose a specific mid building if we have a midType
+        const midBuilding = midType ? availableBuildings[midType][Math.floor(Math.random() * availableBuildings[midType].length)] : null;
+        
+        // Create task object
+        const task = {
+            srcType,
+            tgtType,
+            midType,
+            srcBuilding,
+            tgtBuilding,
+            midBuilding,
+            completed: false,
+            startTime: Date.now(),
+            timeLimit: game.taskTimeLimit * 1000 // convert to ms
+        };
+        
+        // Create a descriptive message for the task
+        if (task.midType) {
+            task.message = `Task: Connect ${BUILDING_DEFAULTS[srcType].name} to ${BUILDING_DEFAULTS[tgtType].name} using the ${BUILDING_DEFAULTS[task.midType].name}.`;
         } else {
-            return `Task: Connect ${BUILDING_DEFAULTS[srcType].name} to ${BUILDING_DEFAULTS[tgtType].name} in the most efficient way.`;
+            task.message = `Task: Connect ${BUILDING_DEFAULTS[srcType].name} to ${BUILDING_DEFAULTS[tgtType].name} directly.`;
+        }
+        
+        return task;
+    }
+    
+    function randomPipelineTask() {
+        // For backward compatibility
+        return generateTask().message;
+    }
+
+    // Function to check and progress through sandbox tutorial steps
+    function checkSandboxProgress() {
+      if (game.currentSandboxStep >= game.sandboxSteps.length) return;
+      
+      const currentStep = game.sandboxSteps[game.currentSandboxStep];
+      
+      // Check if the current step is complete based on its type
+      let stepComplete = false;
+      
+      switch (currentStep.type) {
+        case 'welcome':
+          // Auto-advance after a few seconds
+          if (!currentStep.shown) {
+            currentStep.shown = true;
+            setTimeout(() => {
+              game.currentSandboxStep++;
+            }, 5000);
+          }
+          break;
+          
+        case 'movement':
+          // Complete when player moves
+          if (game.player.x !== 400 || game.player.y !== 300) {
+            stepComplete = true;
+          }
+          break;
+          
+        case 'connect':
+          // Complete when terminal is opened
+          if (terminalActive) {
+            stepComplete = true;
+          }
+          break;
+          
+        case 'help':
+          // Check if help command was used
+          if (terminalActive && commandHistory.some(cmd => cmd.toLowerCase() === 'help')) {
+            stepComplete = true;
+          }
+          break;
+          
+        case 'tools':
+          // Check if list tools command was used
+          if (terminalActive && commandHistory.some(cmd => cmd.toLowerCase() === 'list tools')) {
+            stepComplete = true;
+          }
+          break;
+          
+        case 'send':
+          // Check if send command was attempted
+          if (terminalActive && commandHistory.some(cmd => cmd.toLowerCase().startsWith('send'))) {
+            stepComplete = true;
+          }
+          break;
+          
+        case 'connection':
+          // Check if a connection was made
+          if (game.connections.length > 0) {
+            stepComplete = true;
+          }
+          break;
+          
+        case 'complete':
+          // This is the final step, no auto-advancement
+          break;
+      }
+      
+      // Advance to next step if current step is complete
+      if (stepComplete) {
+        game.currentSandboxStep++;
+        
+        // Show the next step's guidance
+        if (game.currentSandboxStep < game.sandboxSteps.length) {
+          const nextStep = game.sandboxSteps[game.currentSandboxStep];
+          if (terminalActive) {
+            typeLine(`>> ${nextStep.message}`, { className: 'system' });
+          }
+        }
+      }
+    }
+
+    // Check if the current task is completed
+    function checkTaskCompletion() {
+        // Only check completion in challenge mode
+        if (game.mode !== 'challenge' || !game.currentTask || game.currentTask.completed) return false;
+        
+        const { srcType, tgtType, midType } = game.currentTask;
+        
+        // Find buildings of the required types
+        const srcBuildings = game.buildings.filter(b => b.type === srcType && b.active);
+        const tgtBuildings = game.buildings.filter(b => b.type === tgtType && b.active);
+        
+        // If we need a mid node, check for it too
+        if (midType) {
+            const midBuildings = game.buildings.filter(b => b.type === midType && b.active);
+            
+            // Check if we have a connection from src to mid AND from mid to tgt
+            const srcToMidConnected = game.connections.some(c => 
+                (srcBuildings.includes(c.from) && midBuildings.includes(c.to)) ||
+                (midBuildings.includes(c.from) && srcBuildings.includes(c.to)));
+                
+            const midToTgtConnected = game.connections.some(c => 
+                (midBuildings.includes(c.from) && tgtBuildings.includes(c.to)) ||
+                (tgtBuildings.includes(c.from) && midBuildings.includes(c.to)));
+            
+            if (srcToMidConnected && midToTgtConnected) {
+                completeTask();
+                return true;
+            }
+        } else {
+            // Direct connection needed
+            const connected = game.connections.some(c => 
+                (srcBuildings.includes(c.from) && tgtBuildings.includes(c.to)) ||
+                (tgtBuildings.includes(c.from) && srcBuildings.includes(c.to)));
+            
+            if (connected) {
+                completeTask();
+                return true;
+            }
+        }
+        
+        return false;
+    }
+    
+    // Mark task as completed and give rewards
+    function completeTask() {
+        if (!game.currentTask || game.currentTask.completed) return;
+        
+        game.currentTask.completed = true;
+        game.score += 100;
+        game.completedTasks++;
+        
+        // Visual feedback
+        const timeBonus = Math.max(0, Math.floor((game.currentTask.timeLimit - (Date.now() - game.currentTask.startTime)) / 1000));
+        game.score += timeBonus;
+        
+        // Show completion message
+        if (terminalActive) {
+            typeLine(`>> Task completed! +100 points. Time bonus: +${timeBonus} points.`, { className: 'success' });
+            typeLine(`>> Total score: ${game.score}. Tasks completed: ${game.completedTasks}`, { className: 'info' });
+            setTimeout(() => {
+                // Generate new task
+                game.currentTask = generateTask();
+                typeLine(`>> New ${game.currentTask.message}`, { className: 'system' });
+            }, 2000);
+        }
+        
+        // Celebration particles at player position
+        for (let i = 0; i < 3; i++) {
+            setTimeout(() => {
+                game.particles.emit(game.player.x, game.player.y, colors.accent, 3, 20, [3, 8], 1.5);
+            }, i * 300);
         }
     }
-    let initialTaskMessage = randomPipelineTask();
     let initialTaskShown = false;
 
-    // Patch showTerminal to show the task if not yet shown
+    // Patch showTerminal to show the appropriate guidance based on game mode
     const originalShowTerminal = showTerminal;
     showTerminal = function(building) {
         originalShowTerminal(building);
         if (!initialTaskShown) {
             setTimeout(() => {
-                typeLine(initialTaskMessage, { className: 'system', delay: 0 });
+                // Show different content based on game mode
+                if (game.mode === 'sandbox') {
+                    // Show sandbox guidance
+                    typeLine(game.sandboxSteps[0].message, { className: 'system', delay: 0 });
+                    game.sandboxSteps[0].shown = true;
+                } else {
+                    // Show challenge task
+                    typeLine(game.currentTask.message, { className: 'system', delay: 0 });
+                    typeLine(`>> You have ${Math.floor(game.currentTask.timeLimit/1000)} seconds to complete this task.`, { className: 'info', delay: 0 });
+                }
             }, 100);
             initialTaskShown = true;
         }
