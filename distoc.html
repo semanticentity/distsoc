@@ -1,0 +1,1156 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+  <title>Distsoc: Distributed Separation of Concerns</title>
+  <style>
+    /* --- Basic Styles --- */
+    body { margin: 0; overflow: hidden; background: #111827; font-family: monospace; }
+    canvas { display: block; }
+    #ui { position: fixed; top: 10px; left: 10px; color: #E5E7EB; z-index: 1000; }
+    #focus-meter { width: 200px; height: 20px; background: #1F2937; border-radius: 10px; overflow: hidden; margin-bottom: 10px; }
+    #focus-bar { height: 100%; width: 100%; background: #10B981; transition: width 0.3s, background-color 0.3s; } /* Added background-color transition */
+    .stats { background: #374151; padding: 8px; border-radius: 4px; margin-bottom: 5px; }
+
+    /* --- Terminal Styles --- */
+    #terminal {
+      position: fixed;
+      top: 40px;
+      left: 10px;
+      background: rgba(31, 41, 55, 0.95);
+      color: #F9FAFB;
+      border: 2px solid #312e81;
+      border-radius: 6px;
+      font-size: 14px;
+      width: 350px;
+      min-width: 220px;
+      max-width: 90vw;
+      min-height: 120px;
+      max-height: 70vh;
+      height: 250px;
+      display: none;
+      z-index: 1001; 
+      box-shadow: 0 4px 15px rgba(0, 0, 0, 0.5);
+      resize: none;
+      position: relative;
+      overflow: hidden;
+      padding: 10px;
+    }
+    #terminal.show {
+      display: block !important;
+    }
+    #terminal-log {
+      position: absolute;
+      top: 10px;
+      left: 10px;
+      right: 10px;
+      bottom: 48px; /* 38px input height + 10px padding */
+      margin: 0;
+      white-space: pre-wrap;
+      overflow-y: auto;
+      background: none;
+      transition: none;
+      box-sizing: border-box;
+      padding: 0;
+    }
+    #terminal-input-line {
+      position: absolute;
+      left: 10px;
+      right: 10px;
+      bottom: 10px;
+      height: 38px;
+      display: flex;
+      align-items: center;
+      background: none;
+      border-top: 1px solid rgba(75, 85, 99, 0.3);
+      z-index: 2;
+      padding: 8px 0 0 0;
+      margin: 0;
+    }
+    #terminal-resize-handle {
+      position: absolute;
+      width: 18px;
+      height: 18px;
+      right: 2px;
+      bottom: 2px;
+      cursor: se-resize;
+      z-index: 10;
+      background: linear-gradient(135deg, #312e81 40%, #9ca3af 100%);
+      border-radius: 3px;
+      opacity: 0.6;
+      transition: opacity 0.2s;
+    }
+    #terminal-resize-handle:hover {
+      opacity: 1;
+    }
+    #terminal-resize-handle {
+      position: absolute;
+      width: 18px;
+      height: 18px;
+      right: 2px;
+      bottom: 2px;
+      cursor: se-resize;
+      z-index: 10;
+      background: linear-gradient(135deg, #312e81 40%, #9ca3af 100%);
+      border-radius: 3px;
+      opacity: 0.6;
+      transition: opacity 0.2s;
+    }
+    #terminal-resize-handle:hover {
+      opacity: 1;
+    }
+    #terminal pre { margin: 0; white-space: pre-wrap; overflow-y: auto; scrollbar-width: thin; scrollbar-color: #4B5563 #1F2937; }
+    #terminal pre::-webkit-scrollbar { width: 8px; }
+    #terminal pre::-webkit-scrollbar-track { background: #1F2937; border-radius: 4px; }
+    #terminal pre::-webkit-scrollbar-thumb { background-color: #4B5563; border-radius: 4px; border: 2px solid #1F2937; }
+    #terminal-input-line { display: flex; align-items: center; }
+    #terminal-input-line span { margin-right: 5px; color: #6EE7B7; }
+    #terminal input { background: transparent; border: none; color: #F9FAFB; font-family: monospace; font-size: 14px; outline: none; flex-grow: 1; width: auto; }
+    .success { color: #10B981; } .warn { color: #FBBF24; } .error { color: #EF4444; } .info { color: #3B82F6; } .input { color: #9CA3AF; } .system { color: #A78BFA; }
+
+    /* --- Building Info Box Styles --- */
+    #building-info {
+        position: fixed;
+        bottom: 20px;
+        right: 20px;
+        background: rgba(31, 41, 55, 0.9);
+        color: #E5E7EB;
+        border: 1px solid #4B5563;
+        border-radius: 8px;
+        padding: 15px;
+        max-width: 280px;
+        font-size: 13px;
+        z-index: 1002;
+        display: none;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+        backdrop-filter: blur(3px);
+    }
+    #building-info h3 { margin: 0 0 8px 0; color: #A78BFA; font-size: 16px; border-bottom: 1px solid #4B5563; padding-bottom: 5px; }
+    #building-info p { margin: 5px 0; line-height: 1.4; }
+    #building-info strong { color: #9CA3AF; margin-right: 5px; }
+    #building-info ul { list-style: none; padding: 0; margin: 8px 0 0 0; }
+    #building-info li { background: #374151; padding: 3px 6px; margin-bottom: 4px; border-radius: 4px; font-size: 12px; }
+    #building-info .close-btn { position: absolute; top: 5px; right: 8px; background: none; border: none; color: #9CA3AF; font-size: 18px; cursor: pointer; padding: 0; line-height: 1; }
+    #building-info .close-btn:hover { color: #E5E7EB; }
+
+  </style>
+</head>
+
+<body>
+  <canvas id="gameCanvas"></canvas>
+  <div id="ui">
+    <div id="focus-meter"><div id="focus-bar"></div></div>
+    <div id="stats" class="stats"></div>
+    <div id="terminal" class="">
+      <pre id="terminal-log"></pre>
+      <div id="terminal-input-line">
+        <span>&gt;</span><input type="text" id="terminal-input" spellcheck="false" />
+      </div>
+      <div id="terminal-resize-handle"></div>
+    </div>
+    <div id="building-info">
+        <button class="close-btn" onclick="hideBuildingInfo()">×</button>
+        <h3 id="info-name">Building Name</h3>
+        <p id="info-type"><strong>Type:</strong> </p>
+        <p id="info-desc"><strong>Desc:</strong> </p>
+        <p><strong>Tools:</strong></p>
+        <ul id="info-tools"></ul>
+        <p id="info-connections"><strong>Input:</strong> | <strong>Output:</strong> </p>
+        <p id="info-status"><strong>Status:</strong> </p>
+    </div>
+  </div>
+
+  <script>
+    const canvas = document.getElementById('gameCanvas');
+    const ctx = canvas.getContext('2d');
+    const focusBar = document.getElementById('focus-bar');
+    const stats = document.getElementById('stats');
+    const terminal = document.getElementById('terminal');
+    const terminalLog = document.getElementById('terminal-log');
+    const terminalInput = document.getElementById('terminal-input');
+    const buildingInfoBox = document.getElementById('building-info');
+
+    let terminalActive = false;
+    let terminalCooldown = false;
+    let currentNode = null;
+    let commandHistory = [];
+    let historyIndex = -1;
+    const knownCommands = ['help', 'clear', 'status', 'list tools', 'run sanitize', 'send', 'run', 'exit', 'scan network']; // Simplified 'send' and 'run'
+
+    // --- Enhancement State ---
+    let networkScanActive = false;
+    // --- Building Data Definitions ---
+    const BUILDING_DEFAULTS = {
+        'home': { name: "Nexus Core", description: "Primary command & control hub. Regenerates focus.", tools: ["diagnostic_suite", "focus_recharge"], connections: { input: [], output: ["code", "data", "etl"] }, color: '#6366F1' },
+        'code': { name: "Compiler Unit", description: "Processes and refines code fragments.", tools: ["compile", "lint", "refactor"], connections: { input: ["home", "data"], output: ["data", "etl"] }, color: '#10B981' },
+        'data': { name: "Data Silo", description: "Stores and validates incoming data streams.", tools: ["parse", "validate", "transform"], connections: { input: ["home", "code", "etl"], output: ["code", "storage"] }, color: '#F59E0B' },
+        'etl': { name: "ETL Pipeline", description: "Extracts, transforms, and loads data between nodes.", tools: ["extract", "route", "load_balance"], connections: { input: ["code", "data"], output: ["data", "storage", "home"] }, color: '#EC4899' },
+        'storage': { name: "Archive Vault", description: "Long-term, secure data persistence.", tools: ["archive", "retrieve", "checksum"], connections: { input: ["data", "etl"], output: [] }, color: '#8B5CF6' }
+    };
+    const ALL_BUILDING_TYPES = Object.keys(BUILDING_DEFAULTS);
+    const colors = { // Keep colors definition consistent
+        background: '#111827', player: '#10B981', safezone: '#059669', home: '#6366F1',
+        text: '#E5E7EB', accent: '#F59E0B', pet1: '#EC4899', pet2: '#8B5CF6',
+        network: '#3B82F6', data: '#F59E0B', code: '#10B981',
+    };
+
+    // --- Particle System Class ---
+    class ParticleSystem {
+      constructor() {
+        this.particles = [];
+      }
+      emit(x, y, color, speed = 2, count = 5, sizeRange = [2, 6], life = 1) {
+        for (let i = 0; i < count; i++) {
+          this.particles.push({
+            x, y, color,
+            size: Math.random() * (sizeRange[1] - sizeRange[0]) + sizeRange[0],
+            vx: (Math.random() - 0.5) * speed * 2,
+            vy: (Math.random() - 0.5) * speed * 2,
+            life: life * (Math.random() * 0.5 + 0.5)
+          });
+        }
+      }
+      update() { // *** THIS METHOD IS CRUCIAL ***
+        this.particles = this.particles.filter(p => {
+          p.x += p.vx;
+          p.y += p.vy;
+          p.vx *= 0.98;
+          p.vy *= 0.98;
+          p.life -= 0.02;
+          return p.life > 0;
+        });
+      }
+      draw(ctx) {
+        this.particles.forEach(p => {
+          ctx.save();
+          ctx.globalAlpha = Math.max(0, p.life);
+          ctx.fillStyle = p.color;
+          ctx.beginPath();
+          ctx.rect(p.x - p.size / 2, p.y - p.size / 2, p.size, p.size);
+          ctx.fill();
+          ctx.restore();
+        });
+      }
+    }
+
+    // --- Game Object ---
+    const game = {
+      player: { x: 400, y: 300, size: 25, speed: 4, focus: 100, maxFocus: 100, rotation: 0 },
+      pets: [
+        { x: 350, y: 300, size: 12, color: colors.pet1, targetOffset: { x: -40, y: -15 }, rotation: 0, lerpFactor: 0.1 },
+        { x: 450, y: 300, size: 12, color: colors.pet2, targetOffset: { x: -40, y: 15 }, rotation: 0, lerpFactor: 0.08 }
+      ],
+      buildings: [],
+      particles: new ParticleSystem(), // Create instance AFTER class definition
+      keys: {},
+      isMovingPlayer: false
+    };
+
+
+    // --- Enhanced Terminal Functions ---
+    function typeLine(text, opts = {}) {
+      const { delay = 15, className = '', onDone = () => {} } = opts;
+      let i = 0;
+      const line = document.createElement('div');
+      if (className) line.classList.add(className);
+      terminalLog.appendChild(line);
+
+      function step() {
+        if (i < text.length) {
+          line.textContent += text[i++];
+          terminalLog.scrollTop = terminalLog.scrollHeight;
+          setTimeout(step, delay);
+        } else {
+          // After output, always scroll to bottom
+          setTimeout(() => {
+            terminalLog.scrollTop = terminalLog.scrollHeight;
+          }, 0);
+          onDone();
+        }
+      }
+      step();
+    }
+
+    function showTerminal(building) {
+      currentNode = building;
+      terminalLog.innerHTML = '';
+      terminal.classList.add('show');
+      terminalActive = true;
+      showBuildingInfo(building); // Auto open info panel for this node
+
+      // Fallback: Focus input immediately, even before typeLine finishes
+      setTimeout(() => { terminalInput.focus(); }, 10);
+
+      typeLine(`>> Establishing connection to ${building.name} (${building.type.toUpperCase()}) node [${building.x}, ${building.y}]...`, { className: 'info' });
+      setTimeout(() => {
+          typeLine(`>> Secure channel established.`, { className: 'success' });
+          typeLine(`Status: ONLINE. Type 'help' for commands.`, { className: 'system' }, () => {
+              terminalInput.value = '';
+              terminalInput.focus(); // Always focus terminal input
+          });
+      }, 400);
+    }
+
+    function hideTerminal() {
+      terminal.classList.remove('show');
+      terminalActive = false;
+      currentNode = null;
+      // canvas.focus(); // Optionally refocus canvas
+    }
+
+    // --- Autopilot Script Example ---
+     const scripts = {
+        init: [
+            { delay: 0, action: () => typeLine('>> AUTOPILOT: Running initialization sequence...', { className: 'system' }) },
+            { delay: 500, action: () => handleCommand('status', currentNode) },
+            { delay: 1500, action: () => handleCommand('list tools', currentNode) },
+            { delay: 2500, action: () => typeLine('>> AUTOPILOT: Initialization complete.', { className: 'system' }, () => { terminalInput.disabled = false; terminalInput.focus(); }) }, // Re-enable here
+        ]
+    };
+
+    function runScript(name) {
+        const steps = scripts[name];
+        if (!steps || !currentNode) { // Ensure node context
+            typeLine(`>> ERROR: Script "${name}" not found or no node connected.`, { className: 'error' });
+            terminalInput.disabled = false; // Re-enable if script fails early
+            return;
+        }
+
+        let i = 0;
+        let cumulativeDelay = 0; // To re-enable input reliably
+
+        function executeStep() {
+            if (i < steps.length) {
+                const step = steps[i];
+                const stepDelay = step.delay || 0;
+                cumulativeDelay += stepDelay;
+
+                setTimeout(() => {
+                    if (!terminalActive) return; // Stop script if terminal closed mid-run
+                    try {
+                         step.action();
+                    } catch (error) {
+                        console.error("Error during script step:", error);
+                        typeLine(`>> SCRIPT ERROR: ${error.message}`, { className: 'error' });
+                        terminalInput.disabled = false; // Stop and re-enable on error
+                        terminalInput.focus();
+                        return; // Stop execution
+                    }
+                    i++;
+                    // Immediately schedule the next step; delay is handled by setTimeout
+                    if (terminalActive) { // Check again before scheduling next
+                        executeStep();
+                    } else { // Terminal was closed
+                         terminalInput.disabled = false;
+                    }
+                }, stepDelay);
+            } else {
+                // Script finished - re-enable input if last step didn't
+                setTimeout(() => {
+                    if (terminalActive) {
+                         terminalInput.disabled = false;
+                         terminalInput.focus();
+                    }
+                }, 100); // Small buffer after last step completes
+            }
+        }
+        terminalInput.disabled = true; // Disable input during script run
+        executeStep();
+    }
+
+
+    // --- Command Handling Logic ---
+    function handleCommand(cmd, node) { // node parameter is important!
+        const fullCmdText = cmd; // Keep original for history if needed
+        typeLine(`> ${fullCmdText}`, { className: 'input', delay: 1 });
+
+        if (!node && !['exit', 'scan', 'help', 'clear'].includes(cmd.toLowerCase().split(' ')[0])) { // Allow some global commands
+            typeLine(">> CRITICAL ERROR: No node connection required for this command.", { className: 'error' });
+            terminalInput.focus(); // Keep focus for retry
+            return;
+        }
+
+        const args = cmd.toLowerCase().split(' ');
+        const command = args[0];
+
+        switch (command) {
+            case 'help':
+                typeLine("Available commands:", { className: 'info' });
+                knownCommands.forEach((c, index) => typeLine(`  - ${c}`, { delay: 5, onDone: index === knownCommands.length - 1 ? () => terminalInput.focus() : ()=>{} }));
+                break;
+            case 'clear':
+                terminalLog.innerHTML = '';
+                if (node) typeLine(`>> Terminal cleared for ${node.name} (${node.type.toUpperCase()}).`, { className: 'system' }, () => terminalInput.focus());
+                else typeLine(`>> Terminal cleared.`, { className: 'system' }, () => terminalInput.focus());
+                break;
+            case 'status':
+                if (!node) { typeLine(">> ERROR: Connect to a node first ('e' key near node).", { className: 'error' }, () => terminalInput.focus()); break; }
+                typeLine(`>> Node Name: ${node.name}`, { className: 'info' });
+                typeLine(`>> Node Type: ${node.type.toUpperCase()}`, { className: 'info' });
+                typeLine(`>> Location: [${node.x}, ${node.y}]`, { className: 'info' });
+                typeLine(`>> Description: ${node.description}`, { className: 'info' });
+                typeLine(`>> Integrity: 99.8%`, { className: 'info' }); // Placeholder
+                typeLine(`>> Status: ONLINE ${node.locked ? '(LOCKED)' : ''}`, { className: node.locked ? 'warn' : 'success' }, () => terminalInput.focus());
+                break;
+            case 'list':
+                 if (!node) { typeLine(">> ERROR: Connect to a node first.", { className: 'error' }, () => terminalInput.focus()); break; }
+                 if (args[1] === 'tools') {
+                    typeLine(">> Scanning node capabilities...", { className: 'info', delay: 10});
+                    setTimeout(() => {
+                        if (node.tools && node.tools.length > 0) {
+                            node.tools.forEach(tool => typeLine(`  - ${tool}`, {className: 'success', delay: 5}));
+                        } else {
+                            typeLine("  No specific tools detected. Basic I/O available.", { className: 'warn' });
+                        }
+                        terminalInput.focus();
+                    }, 500);
+                 } else {
+                     typeLine(">> Usage: list tools", { className: 'warn' }, () => terminalInput.focus());
+                 }
+              break;
+           case 'run':
+               if (!node) { typeLine(">> ERROR: Connect to a node first.", { className: 'error' }, () => terminalInput.focus()); break; }
+               const scriptOrTool = args[1];
+               if (!scriptOrTool) {
+                    typeLine(">> Usage: run <tool_name | script_name>", { className: 'warn' }, () => terminalInput.focus()); break;
+               }
+               if (scriptOrTool === 'sanitize') { // Built-in 'tool' example
+                    typeLine(">> Initializing node integrity scan...", { className: 'warn', delay: 15 });
+                    setTimeout(() => typeLine(">> [||||||||||||||||||||] Scan complete.", { className: 'info' }), 1200);
+                    setTimeout(() => typeLine(">> No anomalies detected. Node secure.", { className: 'success' }, ()=> terminalInput.focus()), 1800);
+               } else if (scripts[scriptOrTool]) { // Check if it's a known script
+                    runScript(scriptOrTool); // Pass the correct context
+               } else if (node.tools && node.tools.includes(scriptOrTool)) { // Check if it's a tool on the node
+                   typeLine(`>> Executing tool: ${scriptOrTool}...`, { className: 'system' });
+                   setTimeout(() => typeLine(`>> Tool ${scriptOrTool} finished successfully.`, { className: 'success' }, ()=> terminalInput.focus()), 1500);
+                   // Later: Add actual game logic effect of the tool
+               } else {
+                   typeLine(`>> ERROR: Unknown command, tool or script: "run ${scriptOrTool}"`, { className: 'error' }, () => terminalInput.focus());
+               }
+               break;
+           case 'send':
+              if (!node) { typeLine(">> ERROR: Connect to a node first.", { className: 'error' }, () => terminalInput.focus()); break; }
+              const targetType = args[1];
+              if (!targetType) {
+                  typeLine(">> Usage: send <target_type>", { className: 'warn' }, () => terminalInput.focus());
+                  break;
+              }
+
+              if (!node.connections?.output?.includes(targetType)) {
+                  typeLine(`>> ERROR: Node ${node.name} cannot send output to ${targetType.toUpperCase()} nodes.`, { className: 'error' }, () => terminalInput.focus());
+                  break;
+              }
+
+              const targetNode = game.buildings.find(b =>
+                  b !== node &&
+                  b.type === targetType &&
+                  !b.locked && // Can only send to unlocked nodes
+                  b.connections?.input?.includes(node.type)
+              );
+
+              if (targetNode) {
+                  typeLine(`>> Initiating secure transfer from ${node.type.toUpperCase()} to ${targetNode.name} (${targetType.toUpperCase()}) at [${targetNode.x}, ${targetNode.y}]...`, { className: 'info' });
+                  setTimeout(() => typeLine(">> Establishing handshake...", { className: 'warn' }), 800);
+                  setTimeout(() => typeLine(">> Transferring packet [####################] 100%", { className: 'info' }), 1800);
+                  setTimeout(() => typeLine(">> Transfer successful. Connection closed.", { className: 'success' }, () => terminalInput.focus()), 2500);
+              } else {
+                   typeLine(`>> ERROR: No available/unlocked target node of type ${targetType.toUpperCase()} found or connection disallowed.`, { className: 'error' }, () => terminalInput.focus());
+              }
+               break;
+           case 'scan':
+                if (args[1] === 'network') {
+                    typeLine(">> Scanning network for available nodes...", { className: 'info' });
+                    game.buildings.forEach((b, index) => {
+                       setTimeout(() => {
+                            typeLine(`  [${index}] ${b.name} (${b.type.toUpperCase()}) @ [${b.x}, ${b.y}] ${b.locked ? '-LOCKED-' : ''}`, { className: b.locked ? 'warn' : 'system', delay: 5});
+                       }, index * 60); // Slightly slower stagger
+                    });
+                    setTimeout(() => terminalInput.focus(), game.buildings.length * 60 + 150);
+                } else {
+                    typeLine(">> Usage: scan network", { className: 'warn' }, () => terminalInput.focus());
+                }
+                break;
+          case 'exit':
+              typeLine(">> Disconnecting...", { className: 'warn' });
+              setTimeout(hideTerminal, 500);
+              break;
+          default:
+              typeLine(`>> COMMAND UNRECOGNIZED: "${fullCmdText}"`, { className: 'error' }, () => terminalInput.focus());
+              break;
+      }
+      // Ensure scroll after command output might finish later due to timeouts
+      setTimeout(() => {if (terminalActive) terminalLog.scrollTop = terminalLog.scrollHeight}, 50);
+    }
+
+
+    // --- Terminal Input Event Listener ---
+    terminalInput.addEventListener('keydown', (e) => {
+        if (!terminalActive) return;
+
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            if (terminalInput.disabled) return; // Ignore if script is running
+            const cmd = terminalInput.value.trim();
+            if (cmd.length > 0) {
+                terminalInput.value = '';
+                commandHistory.unshift(cmd);
+                if (commandHistory.length > 20) commandHistory.pop();
+                historyIndex = -1;
+                handleCommand(cmd, currentNode); // Pass current node context
+            }
+        } else if (e.key === 'ArrowUp') {
+             if (terminalInput.disabled) return;
+            e.preventDefault();
+            if (commandHistory.length > 0 && historyIndex < commandHistory.length - 1) {
+                historyIndex++;
+                terminalInput.value = commandHistory[historyIndex];
+                terminalInput.setSelectionRange(terminalInput.value.length, terminalInput.value.length);
+            }
+        } else if (e.key === 'ArrowDown') {
+             if (terminalInput.disabled) return;
+            e.preventDefault();
+            if (historyIndex > 0) {
+                historyIndex--;
+                terminalInput.value = commandHistory[historyIndex];
+                 terminalInput.setSelectionRange(terminalInput.value.length, terminalInput.value.length);
+            } else {
+                historyIndex = -1;
+                terminalInput.value = '';
+            }
+        } else if (e.key === 'Tab') {
+             if (terminalInput.disabled) return;
+            e.preventDefault();
+            const currentInput = terminalInput.value.trimStart();
+            const partialCmd = currentInput.split(' ')[0].toLowerCase(); // Autocomplete only the command part
+            if (partialCmd.length > 0) {
+                const potentialCommands = knownCommands.filter(cmd => cmd.startsWith(partialCmd));
+                if (potentialCommands.length === 1) { // Only complete if unique match
+                     terminalInput.value = potentialCommands[0] + ' ';
+                     terminalInput.setSelectionRange(terminalInput.value.length, terminalInput.value.length);
+                } else if (potentialCommands.length > 1) {
+                    // Optional: Log possible completions if multiple matches
+                    typeLine(`>> Possible completions: ${potentialCommands.join(', ')}`, {className: 'info', delay: 1});
+                }
+            }
+        } else if (e.key === 'Escape') {
+             e.preventDefault();
+             hideTerminal();
+        }
+    });
+
+
+    // --- Building Generation ---
+    function generateBuildings(count = 7) { // Defaulting to 7 as per setup
+        const nodes = [];
+        const placedPositions = [];
+        const minDistance = 160; // *** REDUCED DISTANCE ***
+        const padding = 40; // Padding from canvas edges
+
+        // Ensure at least one 'home' node
+        const homeDefaults = BUILDING_DEFAULTS['home'];
+        // NOTE: Width/Height are now set by the old drawing logic, but we still need placement logic
+        const tempWidth = 100 + Math.random() * 20; // Use for placement calculation only
+        const tempHeight = 100 + Math.random() * 20;// Use for placement calculation only
+        const homeX = Math.random() * (canvas.width - tempWidth - padding * 2) + padding;
+        const homeY = Math.random() * (canvas.height - tempHeight - padding * 2) + padding;
+
+        nodes.push({
+            id: `node-0`, type: 'home',
+            x: Math.floor(homeX), y: Math.floor(homeY),
+            width: Math.floor(tempWidth), height: Math.floor(tempHeight), // Store dimensions for old logic
+            radius: 120 + Math.random() * 30, // Regen radius still useful
+            regen: 0.5 + Math.random() * 0.2,
+            required: true, locked: false,
+            ...homeDefaults
+        });
+        placedPositions.push({ x: nodes[0].x + nodes[0].width/2, y: nodes[0].y + nodes[0].height/2 }); // Store center point for distance check
+
+        for (let i = 1; i < count; i++) {
+            let type = ALL_BUILDING_TYPES[Math.floor(Math.random() * ALL_BUILDING_TYPES.length)];
+            if (type === 'home' && Math.random() > 0.15) { // Lower chance of extra homes
+                 let nonHomeTypes = ALL_BUILDING_TYPES.filter(t => t !== 'home');
+                 type = nonHomeTypes[Math.floor(Math.random() * nonHomeTypes.length)];
+            }
+
+            const defaults = BUILDING_DEFAULTS[type];
+            const width = 80 + Math.random() * 40; // Will be used by the old drawing logic
+            const height = 80 + Math.random() * 40;// Will be used by the old drawing logic
+            let x, y, centerX, centerY, tooClose;
+            let attempts = 0;
+
+            do {
+                tooClose = false;
+                x = Math.random() * (canvas.width - width - padding * 2) + padding;
+                y = Math.random() * (canvas.height - height - padding * 2) + padding;
+                centerX = x + width / 2; // Calculate center for distance check
+                centerY = y + height / 2;
+
+                for (const pos of placedPositions) {
+                    if (Math.hypot(centerX - pos.x, centerY - pos.y) < minDistance) {
+                        tooClose = true;
+                        break;
+                    }
+                }
+                attempts++;
+            } while (tooClose && attempts < 100); // Increased attempts slightly
+
+             if (attempts >= 100) console.warn("Could not place building far enough:", type);
+
+            nodes.push({
+                id: `node-${i}`, type: type,
+                x: Math.floor(x), y: Math.floor(y),
+                width: Math.floor(width), height: Math.floor(height), // Store dimensions
+                radius: 90 + Math.random() * 40, // Regen radius still useful
+                regen: 0.3 + Math.random() * 0.3,
+                required: Math.random() < 0.1,
+                locked: Math.random() < 0.2,
+                ...defaults
+            });
+             placedPositions.push({ x: centerX, y: centerY }); // Store center point for distance check
+        }
+        console.log("Generated Buildings:", nodes);
+        return nodes;
+    }
+
+    // --- Building Info Box Functions ---
+    function showBuildingInfo(building) {
+        if (!building) return;
+        document.getElementById('info-name').textContent = building.name || "Unknown Node";
+        document.getElementById('info-type').innerHTML = `<strong>Type:</strong> ${building.type.toUpperCase()}`;
+        document.getElementById('info-desc').innerHTML = `<strong>Desc:</strong> ${building.description || "No data available."}`;
+
+        const toolsList = document.getElementById('info-tools');
+        toolsList.innerHTML = '';
+        if (building.tools && building.tools.length > 0) {
+            building.tools.forEach(tool => {
+                const li = document.createElement('li');
+                li.textContent = tool;
+                toolsList.appendChild(li);
+            });
+        } else {
+             const li = document.createElement('li');
+             li.textContent = "None specific";
+             li.style.fontStyle = 'italic'; li.style.opacity = '0.7';
+             toolsList.appendChild(li);
+        }
+
+        const inputs = building.connections?.input?.join(', ').toUpperCase() || 'None';
+        const outputs = building.connections?.output?.join(', ').toUpperCase() || 'None';
+        document.getElementById('info-connections').innerHTML = `<strong>Input:</strong> ${inputs} | <strong>Output:</strong> ${outputs}`;
+
+        const statusText = building.locked ? 'LOCKED' : building.active ? 'ACTIVE' : building.processing ? 'PROCESSING' : 'IDLE';
+        const statusColor = building.locked ? colors.accent : building.active ? colors.accent : building.processing ? colors.network : colors.player;
+         document.getElementById('info-status').innerHTML = `<strong>Status:</strong> <span style="color:${statusColor}; font-weight: bold;">${statusText}</span>`;
+
+        buildingInfoBox.style.display = 'block';
+    }
+
+    function hideBuildingInfo() {
+        buildingInfoBox.style.display = 'none';
+    }
+
+    // --- Player Movement Function ---
+    function movePlayerTo(targetX, targetY) {
+      if (game.isMovingPlayer) return;
+      game.isMovingPlayer = true;
+      hideBuildingInfo(); // Hide info box when moving
+
+      const startX = game.player.x;
+      const startY = game.player.y;
+      const dx = targetX - startX;
+      const dy = targetY - startY;
+      const distance = Math.hypot(dx, dy);
+      const duration = Math.max(300, distance * 2.5); // Adjusted speed slightly
+      let startTime = null;
+
+      function step(timestamp) {
+        if (!startTime) startTime = timestamp;
+        const elapsed = timestamp - startTime;
+        const progress = Math.min(1, elapsed / duration);
+
+        // Ease out cubic interpolation for smoother arrival
+        const easedProgress = 1 - Math.pow(1 - progress, 3);
+        game.player.x = startX + dx * easedProgress;
+        game.player.y = startY + dy * easedProgress;
+
+        game.player.rotation = Math.atan2(dy, dx); // Point towards destination
+
+        if (progress < 1) {
+          requestAnimationFrame(step);
+        } else {
+          game.player.x = targetX;
+          game.player.y = targetY;
+          game.isMovingPlayer = false;
+           // Potentially re-evaluate interaction after arrival?
+           // e.g., check if near a node and auto-open info/terminal?
+        }
+      }
+      requestAnimationFrame(step);
+    }
+
+
+    // --- Core Game Logic & Setup ---
+    function resize() {
+      canvas.width = window.innerWidth;
+      canvas.height = window.innerHeight;
+      // Regenerate buildings on resize? Might be disruptive, or helpful if layout breaks badly.
+      // game.buildings = generateBuildings(7); // Uncomment if you want regeneration on resize
+    }
+    window.addEventListener('resize', resize);
+
+    window.addEventListener('keydown', (e) => {
+        const key = e.key.toLowerCase();
+        if (key === 'escape' && terminalActive) {
+             hideTerminal();
+             game.keys['escape'] = false; // Consume escape
+             return;
+        }
+        // --- Terminal Focus Enhancement on 'E' ---
+        if (key === 'e') {
+            if (terminal.style.display === 'block') {
+                // Terminal already open, just re-focus input
+                terminalInput.focus();
+            }
+            // Otherwise, let the normal game logic open terminal (showTerminal)
+            // and focus will be handled there
+        }
+        if (terminalActive || game.isMovingPlayer) return; // Block game input
+        game.keys[key] = true;
+    });
+    window.addEventListener('keyup', (e) => {
+        const key = e.key.toLowerCase();
+        if (key !== 'escape') {
+            game.keys[key] = false;
+        } else {
+            // Ensure escape is false if terminal wasn't open
+            game.keys['escape'] = false;
+        }
+    });
+
+    // --- Canvas Click Listeners ---
+    canvas.addEventListener('click', (e) => {
+        if (game.isMovingPlayer) return;
+
+        const rect = canvas.getBoundingClientRect();
+        const clickX = e.clientX - rect.left;
+        const clickY = e.clientY - rect.top;
+
+        let clickedBuilding = null;
+        for (const b of game.buildings) {
+            // Click detection based on the old drawing logic (top-left origin)
+            if (clickX >= b.x && clickX <= b.x + b.width &&
+                clickY >= b.y && clickY <= b.y + b.height) {
+                clickedBuilding = b;
+                break;
+            }
+        }
+
+        if (clickedBuilding) {
+            showBuildingInfo(clickedBuilding);
+        } else {
+            hideBuildingInfo();
+        }
+    });
+
+     canvas.addEventListener('dblclick', (e) => {
+        if (terminalActive || game.isMovingPlayer) return;
+
+        const rect = canvas.getBoundingClientRect();
+        const clickX = e.clientX - rect.left;
+        const clickY = e.clientY - rect.top;
+
+        let dblClickedBuilding = null;
+        for (const b of game.buildings) {
+             // Double-Click detection based on the old drawing logic (top-left origin)
+            if (clickX >= b.x && clickX <= b.x + b.width &&
+                clickY >= b.y && clickY <= b.y + b.height) {
+                dblClickedBuilding = b;
+                break;
+            }
+        }
+
+        if (dblClickedBuilding) {
+            // Move player towards the *center* of the clicked building for better visuals
+            movePlayerTo(dblClickedBuilding.x + dblClickedBuilding.width / 2, dblClickedBuilding.y + dblClickedBuilding.height / 2);
+        }
+     });
+
+
+    // --- Drawing Functions (Updates) ---
+    function drawPlayer(x, y, size, rotation) {
+      // ... Keep the current drawPlayer function ...
+      ctx.save();
+      ctx.translate(x, y);
+      ctx.rotate(rotation);
+      // Main body (triangle)
+      ctx.beginPath();
+      ctx.moveTo(size * 0.8, 0); ctx.lineTo(-size * 0.6, -size * 0.5);
+      ctx.lineTo(-size * 0.4, 0); ctx.lineTo(-size * 0.6, size * 0.5);
+      ctx.closePath();
+      ctx.fillStyle = colors.player;
+      ctx.shadowColor = colors.player; ctx.shadowBlur = 15;
+      ctx.fill();
+      // Outline
+      ctx.strokeStyle = '#E5E7EB'; ctx.lineWidth = 1.5;
+      ctx.stroke();
+      // Cockpit line
+      ctx.beginPath(); ctx.moveTo(size * 0.3, 0); ctx.lineTo(size * 0.1, 0);
+      ctx.strokeStyle = 'rgba(229, 231, 235, 0.5)'; ctx.lineWidth = 2;
+      ctx.stroke();
+      ctx.restore();
+    }
+
+    function drawPet(pet) {
+        // ... Keep the current drawPet function ...
+          ctx.save();
+          ctx.translate(pet.x, pet.y);
+          ctx.rotate(pet.rotation);
+          ctx.beginPath();
+          if (pet.color === colors.pet1) { // Chevron
+              ctx.moveTo(pet.size * 0.8, 0);
+              ctx.lineTo(-pet.size * 0.4, -pet.size * 0.5);
+              ctx.lineTo(-pet.size * 0.4, pet.size * 0.5);
+          } else { // Diamond
+               ctx.moveTo(pet.size * 0.8, 0); ctx.lineTo(0, -pet.size * 0.5);
+               ctx.lineTo(-pet.size * 0.8, 0); ctx.lineTo(0, pet.size * 0.5);
+          }
+          ctx.closePath();
+          ctx.fillStyle = pet.color;
+          ctx.shadowColor = pet.color; ctx.shadowBlur = 10;
+          ctx.fill();
+          ctx.strokeStyle = '#E5E7EB'; ctx.lineWidth = 1;
+          ctx.stroke();
+          ctx.restore();
+    }
+
+    // --- Enhanced drawBuilding FUNCTION with NOTCH ---
+function drawBuilding(b) {
+  ctx.save();
+  ctx.translate(b.x, b.y);
+  // Glow for active/processing
+  if (b.active || b.processing) {
+    ctx.shadowColor = colors.accent;
+    ctx.shadowBlur = 24 + 8 * Math.sin(Date.now()/200);
+  }
+  ctx.fillStyle = b.color || '#888';
+  ctx.strokeStyle = 'rgba(255,255,255,0.7)';
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(0, 0);
+  ctx.lineTo(b.width, 0);
+  ctx.lineTo(b.width, b.height * 0.7); // notch start
+  ctx.lineTo(b.width * 0.7, b.height); // notch corner
+  ctx.lineTo(0, b.height);
+  ctx.closePath();
+  ctx.fill();
+  ctx.stroke();
+  ctx.shadowBlur = 0;
+
+  // Lock indicator handled via status dot color
+
+  // Internal lines
+  ctx.strokeStyle = 'rgba(255,255,255,0.3)';
+  ctx.lineWidth = 1;
+  for (let i = 1; i < 3; i++) {
+    ctx.beginPath();
+    const lineX = b.width * (i / 3);
+    ctx.moveTo(lineX, 0);
+    // Stop at notch if below notch
+    if (lineX > b.width * 0.7) {
+      ctx.lineTo(lineX, b.height * 0.7);
+    } else {
+      ctx.lineTo(lineX, b.height);
+    }
+    ctx.stroke();
+  }
+  // Node status dot
+  ctx.beginPath();
+  ctx.arc(b.width/2, b.height + 10, 7, 0, 2 * Math.PI);
+  // Color logic: locked (red) > active (accent) > idle (gray)
+  ctx.fillStyle = b.locked ? '#EF4444' : b.active ? colors.accent : '#E5E7EB';
+  ctx.globalAlpha = 0.9;
+  ctx.fill();
+  ctx.globalAlpha = 1.0;
+  ctx.restore();
+}
+
+    // *** END OF REPLACED FUNCTION ***
+
+
+    // --- Update Loop ---
+    function update() {
+      // Skip game logic update if terminal is active OR player is auto-moving
+      if (!terminalActive && !game.isMovingPlayer) {
+          game.particles.update(); // *** UPDATE PARTICLES ***
+
+          // Pet movement
+          game.pets.forEach(pet => {
+            const angle = game.player.rotation;
+            const rotatedOffsetX = pet.targetOffset.x * Math.cos(angle) - pet.targetOffset.y * Math.sin(angle);
+            const rotatedOffsetY = pet.targetOffset.x * Math.sin(angle) + pet.targetOffset.y * Math.cos(angle);
+            const targetX = game.player.x + rotatedOffsetX;
+            const targetY = game.player.y + rotatedOffsetY;
+            pet.x += (targetX - pet.x) * pet.lerpFactor;
+            pet.y += (targetY - pet.y) * pet.lerpFactor;
+            const dxToTarget = targetX - pet.x; const dyToTarget = targetY - pet.y;
+            pet.rotation = Math.atan2(dyToTarget, dxToTarget);
+            if (Math.random() < 0.03) {
+              game.particles.emit(pet.x, pet.y, pet.color, 1, 2, [1, 3]);
+            }
+          });
+
+          // Player movement input
+          let moveX = 0; let moveY = 0;
+          let rotating = false;
+          if (game.keys['arrowup'] || game.keys['w']) { moveY = 1; }
+          if (game.keys['arrowdown'] || game.keys['s']) { moveY = -0.6; } // Slower reverse
+          if (game.keys['arrowleft'] || game.keys['a']) { game.player.rotation -= 0.08; rotating = true; }
+          if (game.keys['arrowright'] || game.keys['d']) { game.player.rotation += 0.08; rotating = true; }
+
+          // Apply movement based on rotation
+          const moveMagnitude = Math.abs(moveY); // Use magnitude for forward/backward speed
+          if (moveMagnitude > 0) {
+              const moveDir = moveY > 0 ? 1 : -1; // Forward or backward
+              game.player.x += Math.cos(game.player.rotation) * game.player.speed * moveDir * (moveDir > 0 ? 1 : 0.6); // Apply reverse penalty
+              game.player.y += Math.sin(game.player.rotation) * game.player.speed * moveDir * (moveDir > 0 ? 1 : 0.6);
+              // Thrust particles only when moving forward
+               if (moveDir > 0 && Math.random() < 0.5) {
+                    const backOffsetX = -game.player.size * 0.7;
+                    const emissionX = game.player.x + backOffsetX * Math.cos(game.player.rotation);
+                    const emissionY = game.player.y + backOffsetX * Math.sin(game.player.rotation);
+                    game.particles.emit(emissionX, emissionY, colors.accent, 2, 2, [2, 4]);
+               }
+          }
+
+
+          // Focus logic
+          let inSafeZone = false;
+          let currentRegen = 0;
+          for (const building of game.buildings) {
+            // Calculate distance from player to building CENTER for safe zone check
+            const dxB = game.player.x - (building.x + building.width / 2);
+            const dyB = game.player.y - (building.y + building.height / 2);
+            const distance = Math.hypot(dxB, dyB);
+            if (distance < building.radius) { // Safe zone radius is still based on center
+              inSafeZone = true;
+              currentRegen = building.regen; // Get regen rate from current building
+              // Optional: Safe zone particles
+              if (Math.random() < 0.02) {
+                  game.particles.emit(game.player.x + (Math.random()-0.5)*20, game.player.y + (Math.random()-0.5)*20, building.color+'55', 0.5, 1, [1,2], 0.5);
+              }
+              break; // Only one zone affects at a time
+            }
+          }
+
+          if (inSafeZone) {
+            game.player.focus = Math.min(game.player.maxFocus, game.player.focus + currentRegen);
+          } else {
+            game.player.focus = Math.max(0, game.player.focus - 0.08); // Drain outside
+          }
+
+          // UI Update (Focus Bar & Stats)
+          const ratio = game.player.focus / game.player.maxFocus;
+          focusBar.style.width = (ratio * 100) + '%';
+          const hue = ratio * 120; // 0 (red) to 120 (green)
+          focusBar.style.backgroundColor = `hsl(${hue}, 80%, 45%)`;
+          stats.textContent = `FCS: ${Math.floor(game.player.focus)}% | POS: ${Math.floor(game.player.x)}, ${Math.floor(game.player.y)}`;
+
+          // Terminal Interaction Check (E key)
+          if (game.keys['e'] && !terminalCooldown && !terminalActive) {
+              terminalCooldown = true;
+              setTimeout(() => terminalCooldown = false, 300);
+
+              let closestBuilding = null;
+              let minDistSq = Infinity; // Use squared distance for comparison efficiency
+
+              for (const b of game.buildings) {
+                  // Check distance from player to building CENTER for interaction range
+                  const dxB = game.player.x - (b.x + b.width / 2);
+                  const dyB = game.player.y - (b.y + b.height / 2);
+                  const distSq = dxB * dxB + dyB * dyB; // Squared distance
+                  // Interaction radius based on building center + margin
+                  const interactionRadius = Math.max(b.width, b.height) / 2 + 60;
+
+                  if (distSq < interactionRadius * interactionRadius && distSq < minDistSq) {
+                       minDistSq = distSq;
+                       closestBuilding = b;
+                  }
+              }
+
+              if (closestBuilding) {
+                  if (!closestBuilding.locked) {
+                       showTerminal(closestBuilding);
+                  } else {
+                       // Optional: Visual feedback for locked node interaction attempt
+                       console.log("Node is locked.");
+                       game.particles.emit(closestBuilding.x+closestBuilding.width/2, closestBuilding.y+closestBuilding.height/2, colors.accent, 3, 8, [2,5], 0.8);
+                  }
+              }
+          }
+      } // End of if(!terminalActive && !game.isMovingPlayer) block
+    }
+
+    // --- Draw Loop ---
+function draw() {
+  // Clear canvas
+  ctx.fillStyle = colors.background;
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+  // Draw Grid
+  ctx.strokeStyle = 'rgba(55, 65, 81, 0.5)'; ctx.lineWidth = 0.5;
+  const gridSize = 50;
+  for (let x = 0; x < canvas.width; x += gridSize) { ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, canvas.height); ctx.stroke(); }
+  for (let y = 0; y < canvas.height; y += gridSize) { ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(canvas.width, y); ctx.stroke(); }
+
+  // Draw Building Safe Zones (Still based on building center)
+  for (const building of game.buildings) {
+    const centerX = building.x + building.width / 2; const centerY = building.y + building.height / 2;
+    const g = ctx.createRadialGradient(centerX, centerY, 0, centerX, centerY, building.radius);
+    const zoneColor = (building.color || '#6366F1') + '1A'; // Use building color or fallback
+    g.addColorStop(0, zoneColor); g.addColorStop(0.7, zoneColor); g.addColorStop(1, 'rgba(0, 0, 0, 0)');
+    ctx.fillStyle = g;
+    ctx.beginPath(); ctx.arc(centerX, centerY, building.radius, 0, Math.PI * 2); ctx.fill();
+    // Zone outline
+    ctx.strokeStyle = (building.color || '#6366F1') + '33';
+    ctx.lineWidth = 1; ctx.setLineDash([4, 8]);
+    ctx.beginPath(); ctx.arc(centerX, centerY, building.radius, 0, Math.PI * 2); ctx.stroke();
+    ctx.setLineDash([]);
+  }
+
+  // --- Enhanced: Draw Animated Network Links ---
+  ctx.save();
+  ctx.strokeStyle = colors.network + 'B0'; ctx.lineWidth = 2; ctx.setLineDash([8, 12]);
+  for (let i = 0; i < game.buildings.length; i++) {
+    for (let j = i + 1; j < game.buildings.length; j++) {
+      const b1 = game.buildings[i]; const b2 = game.buildings[j];
+      ctx.beginPath();
+      ctx.moveTo(b1.x + b1.width / 2, b1.y + b1.height / 2);
+      ctx.lineTo(b2.x + b2.width / 2, b2.y + b2.height / 2);
+      ctx.stroke();
+      // Animate packet if edge is active
+      if ((b1.active || b2.active || networkScanActive)) {
+        let t = ((Date.now()/400) % 1);
+        let px = (b1.x + b1.width/2) + (b2.x + b2.width/2 - (b1.x + b1.width/2)) * t;
+        let py = (b1.y + b1.height/2) + (b2.y + b2.height/2 - (b1.y + b1.height/2)) * t;
+        ctx.beginPath();
+        ctx.arc(px, py, 7, 0, 2 * Math.PI);
+        ctx.fillStyle = b1.active || b2.active ? colors.accent : colors.network;
+        ctx.globalAlpha = 0.7;
+        ctx.fill();
+        ctx.globalAlpha = 1.0;
+      }
+    }
+  }
+  ctx.restore();
+  ctx.setLineDash([]);
+
+  // Draw Buildings (Enhanced: glow if active/processing)
+  game.buildings.forEach(drawBuilding);
+
+  // Draw Pets
+  game.pets.forEach(drawPet);
+
+  // Draw Player
+  drawPlayer(game.player.x, game.player.y, game.player.size, game.player.rotation);
+
+  // Draw Particles
+  game.particles.draw(ctx);
+  
+  // --- Minimal Legend ---
+  ctx.save();
+  ctx.font = '14px monospace';
+  ctx.globalAlpha = 0.8;
+  ctx.fillStyle = '#18181b';
+  ctx.fillRect(18, 30, 162, 74);
+  ctx.globalAlpha = 1;
+  ctx.fillStyle = colors.player; ctx.fillText('▲ Player', 30, 50);
+  ctx.fillStyle = colors.accent; ctx.fillText('● Active Node', 30, 68);
+  ctx.fillStyle = colors.network; ctx.fillText('━ Pipeline', 30, 86);
+  ctx.fillStyle = '#E5E7EB'; ctx.fillText('○ Idle Node', 30, 104);
+  ctx.restore();
+}
+
+    // --- Game Loop ---
+    function gameLoop() {
+      update();
+      draw();
+      requestAnimationFrame(gameLoop);
+    }
+
+    // --- Initial Setup ---
+    resize(); // Initial resize to set canvas dimensions
+    game.buildings = generateBuildings(7); // Generate buildings after resize
+
+    // --- Terminal Resize Logic ---
+    (function() {
+      const term = document.getElementById('terminal');
+      const handle = document.getElementById('terminal-resize-handle');
+      let resizing = false;
+      let startX, startY, startWidth, startHeight;
+      handle.addEventListener('mousedown', function(e) {
+        e.preventDefault();
+        resizing = true;
+        startX = e.clientX;
+        startY = e.clientY;
+        startWidth = term.offsetWidth;
+        startHeight = term.offsetHeight;
+        document.body.style.userSelect = 'none';
+      });
+      window.addEventListener('mousemove', function(e) {
+        if (!resizing) return;
+        const dx = e.clientX - startX;
+        const dy = e.clientY - startY;
+        let newWidth = Math.max(220, startWidth + dx);
+        let newHeight = Math.max(120, startHeight + dy);
+        newWidth = Math.min(window.innerWidth * 0.9, newWidth);
+        newHeight = Math.min(window.innerHeight * 0.7, newHeight);
+        term.style.width = newWidth + 'px';
+        term.style.height = newHeight + 'px';
+      });
+      window.addEventListener('mouseup', function() {
+        if (resizing) {
+          resizing = false;
+          document.body.style.userSelect = '';
+        }
+      });
+    })();
+
+    // --- Initial Pipeline Task Logic ---
+    function randomPipelineTask() {
+        // Pick random source and target nodes of different types
+        const types = Object.keys(BUILDING_DEFAULTS);
+        let srcType, tgtType, midType;
+        do {
+            srcType = types[Math.floor(Math.random() * types.length)];
+            tgtType = types[Math.floor(Math.random() * types.length)];
+        } while (srcType === tgtType);
+        // Optionally, pick a mid pipeline node (e.g., 'etl', 'code', etc.)
+        const midTypes = types.filter(t => t !== srcType && t !== tgtType);
+        midType = midTypes.length ? midTypes[Math.floor(Math.random() * midTypes.length)] : null;
+        // Compose the task (plain text, no HTML)
+        if (midType && Math.random() > 0.5) {
+            return `Task: Build a pipeline from ${BUILDING_DEFAULTS[srcType].name} to ${BUILDING_DEFAULTS[tgtType].name} using the ${BUILDING_DEFAULTS[midType].name}.`;
+        } else {
+            return `Task: Connect ${BUILDING_DEFAULTS[srcType].name} to ${BUILDING_DEFAULTS[tgtType].name} in the most efficient way.`;
+        }
+    }
+    let initialTaskMessage = randomPipelineTask();
+    let initialTaskShown = false;
+
+    // Patch showTerminal to show the task if not yet shown
+    const originalShowTerminal = showTerminal;
+    showTerminal = function(building) {
+        originalShowTerminal(building);
+        if (!initialTaskShown) {
+            setTimeout(() => {
+                typeLine(initialTaskMessage, { className: 'system', delay: 0 });
+            }, 100);
+            initialTaskShown = true;
+        }
+    };
+
+    gameLoop(); // Start the main loop
+
+  </script>
+</body>
+</html>
