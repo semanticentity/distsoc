@@ -1,4 +1,4 @@
-# Distsoc Playground
+# Distributed Separation of Concerns: Playground
 
 Live demo: https://codepen.io/semanticentity/full/xbbVpdX
 
