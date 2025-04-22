@@ -15,7 +15,7 @@ An interactive playground for exploring distributed systems, CLIs, and APIs visu
 - When near a node, press `E` to open the terminal
 - Use the terminal to interact with nodes - type `help` for a list of commands
 
-![distsoc-sandbox](https://github.com/user-attachments/assets/9fc47bd9-3912-4a9e-9f6c-1b9a7805cb5a)
+![distsoc-challenge1](https://github.com/user-attachments/assets/7b5f2aa8-bee7-4587-8c50-f64c971b335e)
 
 ### Camera System
 - **Unlimited World**: Explore beyond the canvas edges with the new camera system
